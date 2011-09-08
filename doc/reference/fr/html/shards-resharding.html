@@ -1,0 +1,79 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapitre&nbsp;4.&nbsp;Refragmentation</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="shards-shardstrategy.html" title="Chapitre&nbsp;3.&nbsp;Shard Strategy"><link rel="next" href="shards-querying.html" title="Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapitre&nbsp;4.&nbsp;Refragmentation</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="shards-shardstrategy.html">Pr&eacute;c&eacute;dent</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="shards-querying.html">Suivant</a></td></tr></table><hr></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-resharding"></a>Chapitre&nbsp;4.&nbsp;Refragmentation</h2></div></div><div></div></div><p>
+        Quand un ensemble de donn&eacute;es d'une application grossit au-del&agrave; de la capacit&eacute;
+        des bases de donn&eacute;es allou&eacute;e &agrave; l'application, il devient n&eacute;cessaire d'ajouter
+        plus de bases de donn&eacute;es, et il est souvent d&eacute;sirable de redistribuer les
+        donn&eacute;es &agrave; travers les fragments (soit pour r&eacute;ussir une r&eacute;partition des charges
+        propre, soit pour satisfaire les invariants de l'application) : ceci s'appelle
+        la refragmentation. La refragmentation est probl&egrave;me compliqu&eacute;, et elle peut &ecirc;tre
+        la source de complication majeures dans la gestion de votre application de production
+        si elle n'est pas prise en compte durant la conception. Pour att&eacute;nuer le
+        supplice associ&eacute; &agrave; la refragmentation, Hibernate Shards fournit la prise en charge
+        de fragments virtuels.
+    </p><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-resharding-virtual"></a>4.1.&nbsp;Fragments virtuels</h2></div></div><div></div></div><p>
+            Dans le cas g&eacute;n&eacute;ral, chaque objet vit sur un fragment. Refragmenter consiste
+            en deux t&acirc;ches : d&eacute;placer l'objet vers un autre fragment, et changer les
+            mappings objet-fragment. Le mapping objet-fragment est captur&eacute; soit par
+            l'identifiant du fragment cod&eacute; dans l'identifiant de l'objet, soit par
+            la logique interne de la strat&eacute;gie de r&eacute;solution du fragment que l'objet utilise.
+            Dans le premier cas, refragmenter demanderait de changer tous les identifiants
+            des objets et les clefs &eacute;trang&egrave;res. Dans le second cas, refragmenter pourrait
+            demander n'importe quoi allant du changement de configuration d'ex&eacute;cution
+            d'une <tt class="classname">ShardResolutionStrategy</tt> donn&eacute;e au changement
+            d'algorithme de la <tt class="classname">ShardResolutionStrategy</tt>. Malheureusement,
+            le probl&egrave;me de changer des mappings objet-fragment devient m&ecirc;me pire une fois
+            que l'on prend en compte le fait que Hibernate Shards ne prend pas en
+            charge les relations &agrave; travers plusieurs fragments. Cette limitation nous
+            emp&ecirc;che de d&eacute;placer un sous-ensemble d'un graphe d'objets d'un fragment vers
+            un autre.
+        </p><p>
+            La t&acirc;che de changer de mapping objet-fragment peut &ecirc;tre simplifi&eacute;e en ajoutant
+            un niveau d'indirection - chaque objet vit sur un fragment virtuel, et chaque
+            fragment virtuel est mapp&eacute; vers un fragment physique. Durant la conception,
+            les d&eacute;veloppeurs doivent d&eacute;cider du nombre maximum de fragments physiques
+            dont l'application aura besoin. Ce maximum est alors utilis&eacute; comme le nombre
+            de fragments virtuels, et ces fragments virtuels sont alors mapp&eacute;s vers des
+            fragments physiques actuellement requis par l'application. Puisque tous les
+            <tt class="classname">ShardSelectionStrategy</tt>,
+            <tt class="classname">ShardResolutionStrategy</tt>, et
+            <tt class="classname">ShardEncodingIdentifierGenerator</tt> d'Hibernate Shards
+            op&egrave;rent sur des fragments virtuels, les objets seront r&eacute;partis correctement
+            &agrave; travers les fragments virtuels. Durant la refragmentation, les mappings
+            objet-fragment peuvent maintenant &ecirc;tre simplement modifi&eacute; en changeant les
+            mappings de fragments virtuels vers des fragments physiques.
+        </p><p>
+            Si vous vous inqui&eacute;tez &agrave; propos de l'estimation correcte du nombre maximum
+            de fragments physiques dont votre application a besoin, visez haut. Les
+            fragments virtuels ne co&ucirc;tent pas grand chose. En fin de compte, vous serez bien mieux
+            avec des fragments virtuels en trop plut&ocirc;t que de devoir en rajouter.
+        </p><p>
+            Pour activer la fragmentation virtuelle, vous avez besoin de cr&eacute;er votre
+            <tt class="classname">ShardedConfiguration</tt> avec une Map des identifiants
+            des fragments virtuels vers les identifiants des fragments physiques. Voici
+            un exemple o&ugrave; nous avons 4 fragments virtuels mapp&eacute;s vers 2 fragments physiques.
+</p><pre class="programlisting">
+Map&lt;Integer, Integer&gt; virtualShardMap = new HashMap&lt;Integer, Integer&gt;();
+virtualShardMap.put(0, 0);
+virtualShardMap.put(1, 0);
+virtualShardMap.put(2, 1);
+virtualShardMap.put(3, 1);
+ShardedConfiguration shardedConfig =
+    new ShardedConfiguration(
+        prototypeConfiguration,
+        configurations,
+        strategyFactory,
+        virtualShardMap);
+return shardedConfig.buildShardedSessionFactory();
+</pre><p>
+            Pour ensuite transformer le fragment virtuel en mapping de fragments physiques,
+            il faut seulement changer la <tt class="classname">virtualShardToShardMap</tt>
+            pass&eacute;e au constructeur.
+        </p><p>
+            Nous avons mentionn&eacute; que la deuxi&egrave;me t&acirc;che durant la repartition est de
+            d&eacute;placer les donn&eacute;es d'un fragment physique vers un autre. Hibernate Shards
+            n'essaie pas de fournir de prise en charge automatique pour cela puisque
+            c'est en g&eacute;n&eacute;ral tr&egrave;s sp&eacute;cifique &agrave; l'application, et la complexit&eacute; varie
+            selon le besoin potentiel de refragmentation &agrave; chaud, de l'architecture
+            de d&eacute;ploiement de l'application, etc.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="shards-shardstrategy.html">Pr&eacute;c&eacute;dent</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Niveau sup&eacute;rieur</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="shards-querying.html">Suivant</a></td></tr><tr><td width="40%" align="left" valign="top">Chapitre&nbsp;3.&nbsp;Shard Strategy&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Sommaire</a></td><td width="40%" align="right" valign="top">&nbsp;Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes</td></tr></table></div></body></html>

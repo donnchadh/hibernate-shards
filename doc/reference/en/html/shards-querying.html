@@ -1,0 +1,58 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;5.&nbsp;Querying</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="shards-resharding.html" title="Chapter&nbsp;4.&nbsp;Resharding"><link rel="next" href="shards-limitations.html" title="Chapter&nbsp;6.&nbsp;Limitations"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;5.&nbsp;Querying</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="shards-resharding.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="shards-limitations.html">Next</a></td></tr></table><hr></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-querying"></a>Chapter&nbsp;5.&nbsp;Querying</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-overview"></a>5.1.&nbsp;Overview</h2></div></div><div></div></div><p>
+            Executing queries across shards can be hard.  In this chapter we'll discuss what works,
+            what doesn't, and what you can do to stay out of trouble.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-criteria"></a>5.2.&nbsp;Criteria</h2></div></div><div></div></div><p>
+            As we discuss in the chapter on Limitations, we do not yet have a complete implementation of the
+            Hibernate Core API.  This limitation applies to <tt class="classname">ShardedCriteriaImpl</tt>,
+            which is a shard-aware implementation of the <tt class="classname">Criteria</tt> interface.
+            In this chapter we won't go into the details of specific things that haven't been implemented.
+            Rather, we're going to discuss the types of <tt class="classname">Criteria</tt> queries that are
+            problematic in a sharded environment.
+        </p><p>
+            Simply put, queries that do sorting are trouble.  Why?  Because we can't return a properly
+            sorted list without the ability to compare any value in the list to any other value in the list,
+            and the entire list isn't available until the results of the individual queries have been
+            collected in the application tier.  The sorting needs to take place inside Hibernate Shards, and
+            in order for this to happen we require that all objects returned by a <tt class="classname">Criteria</tt>
+            query with an order-by clause implement the <tt class="classname">Comparable</tt> interface.
+            If the type of the objects you return do not implement this interface you'll receive an
+            exception.
+        </p><p>
+            Distinct clauses are trouble as well.  So much trouble, in fact, that at the moment we don't
+            even support them.  Sorry about that.
+        </p><p>
+            On the other hand, while distinct and order-by are trouble, aggregation works just fine.
+            Consider the following example:
+            </p><pre class="programlisting">
+        // fetch the average of all temperatures recorded since last thursday
+        Criteria crit = session.createCriteria(WeatherReport.class);
+        crit.add(Restrictions.gt("timestamp", lastThursday));
+        crit.setProjection(Projections.avg("temperature"));
+        return crit.list();
+            </pre><p>
+            In a single-shard environment this query can be easily answered, but in a multi-shard
+            environment it's a little bit trickier.  Why?  Because just getting the average from each
+            shard isn't enough to calculate the average across all shards.  In order to calculate this
+            piece of information we need not just the average but the number of records from each shard.
+            This is exactly what we do, and the performance hit (doing an extra count as part of
+            each query) is probably negligible.
+            Now, if we wanted the median
+            we'd be in trouble (just adding the count to the query would not provide enough information
+            to perform the calculation), but at the moment <tt class="classname">Criteria</tt> doesn't expose
+            a median function so we'll deal with that if and when it becomes and issue.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-hql"></a>5.3.&nbsp;HQL</h2></div></div><div></div></div><p>
+            Our support for HQL is, at this point, not nearly as good as the support we have for <tt class="classname">Criteria</tt>
+            queries.  We have not yet implemented any extensions to the query parser, so we don't support
+            distinct, order-by, or aggregations.  This means you can only use HQL for very simple queries.  You're
+            probably better off staying clear of HQL in this release if you can help it.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-strategy"></a>5.4.&nbsp;Use of Shard Strategy When Querying</h2></div></div><div></div></div><p>
+            The only component of your shard strategy that is consulted when executing a query (<tt class="classname">Criteria</tt>
+            or HQL) is the <tt class="classname">ShardAccessStrategy</tt>.  <tt class="classname">ShardSelectionStrategy</tt>
+            is ignored because executing a query doesn't create any new records in the database.  <tt class="classname">ShardResolutionStrategy</tt>
+            is ignored because we currently assume that you always want your query executed on all shards.  If this
+            isn't the case, the best thing to do is just downcast your <tt class="classname">Session</tt> to a <tt class="classname">ShardedSession</tt>
+            and dig out the shard-specific <tt class="classname">Session</tt>s you need.  Clunky, but it works.  We'll
+            come up with a better solution for this in later releases.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="shards-resharding.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="shards-limitations.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">Chapter&nbsp;4.&nbsp;Resharding&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;6.&nbsp;Limitations</td></tr></table></div></body></html>

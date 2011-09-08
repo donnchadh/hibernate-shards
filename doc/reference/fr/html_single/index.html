@@ -1,0 +1,912 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Hibernate Shards</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="book" lang="fr"><div class="titlepage"><div><div><h1 class="title"><a name="d0e1"></a>Hibernate Shards</h1></div><div><h2 class="subtitle">Horizontal Partitioning With Hibernate</h2></div><div><h2 class="subtitle">Reference Guide</h2></div><div><p class="releaseinfo">3.0.0.Beta1</p></div></div><div></div><hr></div><div class="toc"><p><b>Table des mati&egrave;res</b></p><dl><dt><span class="preface"><a href="#preface">Pr&eacute;face</a></span></dt><dt><span class="chapter"><a href="#shards-architecture">1. Architecture</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-architecture-overview">1.1. Vue d'ensemble</a></span></dt><dt><span class="sect1"><a href="#shards-architecture-general">1.2. La logique de fragmentation g&eacute;n&eacute;ralis&eacute;e</a></span></dt><dt><span class="sect1"><a href="#shards-architecture-application">1.3. La logique de fragmentation sp&eacute;cifique &agrave; l'application</a></span></dt><dt><span class="sect1"><a href="#shards-architecture-requirements">1.4. Pr&eacute;-requis syst&egrave;me</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-configuration">2. Configuration</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-configuration-overview">2.1. Vue d'ensemble</a></span></dt><dd><dl><dt><span class="sect2"><a href="#shards-configuration-overview-sample-schema">2.1.1. Sch&eacute;ma de base de donn&eacute;es d'un rapport m&eacute;t&eacute;orologique</a></span></dt><dt><span class="sect2"><a href="#shards-configuration-overview-sample-model">2.1.2. Mod&egrave;le objet d'un rapport m&eacute;t&eacute;orologique</a></span></dt><dt><span class="sect2"><a href="#shards-configuration-overview-sample-mapping">2.1.3. Contenu de weather.hbm.xml</a></span></dt></dl></dd><dt><span class="sect1"><a href="#shards-configuration-sf">2.2. Obtenir une ShardedSessionFactory</a></span></dt><dt><span class="sect1"><a href="#shards-configuration-limitations">2.3. Limitations de la configuration</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-shardstrategy">3. Shard Strategy</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-strategy-overview">3.1. Vue d'ensemble</a></span></dt><dt><span class="sect1"><a href="#shards-strategy-shardaccess">3.2. ShardAccessStrategy</a></span></dt><dd><dl><dt><span class="sect2"><a href="#shards-strategy-shardaccess-seq">3.2.1. SequentialShardAccessStrategy</a></span></dt><dt><span class="sect2"><a href="#shards-strategy-shardaccess-par">3.2.2. ParallelShardAccessStrategy</a></span></dt></dl></dd><dt><span class="sect1"><a href="#shards-strategy-shardselection">3.3. ShardSelectionStrategy</a></span></dt><dt><span class="sect1"><a href="#shards-strategy-shardresolution">3.4. ShardResolutionStrategy</a></span></dt><dt><span class="sect1"><a href="#shards-strategy-idgen">3.5. G&eacute;n&eacute;ration d'identifiants</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-resharding">4. Refragmentation</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-resharding-virtual">4.1. Fragments virtuels</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-querying">5. Requ&ecirc;tes</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-querying-overview">5.1. Vue d'ensemble</a></span></dt><dt><span class="sect1"><a href="#shards-querying-criteria">5.2. Criteria</a></span></dt><dt><span class="sect1"><a href="#shards-querying-hql">5.3. HQL</a></span></dt><dt><span class="sect1"><a href="#shards-querying-strategy">5.4. Use of Shard Strategy When Querying</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-limitations">6. Limitations</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-limitations-api">6.1. Impl&eacute;mentation incompl&egrave;te de l'API Hibernate</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-cross-shard">6.2. Graphes d'objets inter-fragments</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-txns">6.3. Transactions r&eacute;parties</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-interceptors">6.4. Intercepteurs &agrave; &eacute;tat</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-base-ids">6.5. Des objets avec des identifiants qui sont des types de base</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-replicated-data">6.6. Donn&eacute;es r&eacute;pliqu&eacute;es</a></span></dt></dl></dd></dl></div><div class="preface" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="preface"></a>Pr&eacute;face</h2></div></div><div></div></div><p>Traducteur(s) : Vincent Ricard</p><p>
+            Vous ne pouvez pas toujours mettre vos donn&eacute;es relationnelles dans une
+            seule base de donn&eacute;es relationnelle. Parfois vous avez simplement trop
+            de donn&eacute;es. Parfois vous avez une architecture de d&eacute;ploiement r&eacute;partie
+            (la latence r&eacute;seau entre la Californie et l'Inde peut &ecirc;tre trop grande
+            pour avoir une seule base de donn&eacute;es). Il peut m&ecirc;me y avoir des raisons
+            non techniques (un client potentiel ne traitera simplement pas &agrave; moins
+            que les donn&eacute;es de sa compagnie soient dans sa propre instance de base).
+            Quelques soient vos raisons, parler de plusieurs bases de donn&eacute;es
+            relationnelles complique in&eacute;vitablement le d&eacute;veloppement de votre
+            application. Hibernate Shards est un framework qui est con&ccedil;u pour
+            encapsuler et minimiser cette complexit&eacute; en ajoutant la prise en charge du
+            <a href="http://en.wikipedia.org/w/index.php?title=Partition_%28database%29&amp;oldid=99996308" target="_top">partitionnement horizontal</a> au dessus d'Hibernate Core. Nous
+            avons simplement pour but de founir une vue unifi&eacute;e de plusieurs bases
+            de donn&eacute;es via Hibernate.
+        </p><p>
+            Qu'est donc un "shard" (NdT : fragment) ? Bonne question. "Shard" est juste un autre
+            mot pour "segment" ou "partition", mais c'est le terme choisi par
+            Google. Hibernate Shards &eacute;tait &agrave; l'origine le
+            <a href="http://www.google.com/support/jobs/bin/static.py?page=about.html" target="_top">projet de 20 pourcents</a>
+            d'une petite &eacute;quipe d'ing&eacute;nieurs Google, donc la nomenclature du projet
+            tournait autour des fragments depuis le d&eacute;but. Nous ouvrons les sources
+            que nous avons jusqu'ici parce que nous voulons que la communaut&eacute;
+            Hibernate puisse b&eacute;n&eacute;ficier de nos efforts d&egrave;s que possible, mais aussi
+            avec l'espoir et le d&eacute;sir que cette communaut&eacute; puisse nous aider &agrave;
+            atteindre une version GA plus rapidement que si nous gardions pour nous.
+            Nous nous attendons tout &agrave; fait &agrave; trouver des d&eacute;fauts dans notre
+            conception et notre impl&eacute;mentation, et nous appr&eacute;cions votre patience
+            pendant que nous travaillons &agrave; les corriger.
+        </p></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-architecture"></a>Chapitre&nbsp;1.&nbsp;Architecture</h2></div></div><div></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-overview"></a>1.1.&nbsp;Vue d'ensemble</h2></div></div><div></div></div><p>
+            Hibernate Shards est une extension d'Hibernate Core, con&ccedil;u pour encapsuler et minimiser
+            la complexit&eacute; de travailler avec des donn&eacute;es fragment&eacute;es (horizontalement
+            partitionn&eacute;es). Hibernate Shards peut &ecirc;tre conceptuellement divis&eacute; en
+            deux domaines que vous aurez besoin de comprendre pour r&eacute;ussir. Les deux
+            domaines sont :
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>la logique de fragmentation g&eacute;n&eacute;ralis&eacute;e ;</p></li><li style="list-style-type: circle"><p>la logique de fragmentation sp&eacute;cifique &agrave; l'application.</p></li></ul></div><p>
+            Nous discuterons de chacun de ces domaines &agrave; leur tour.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-general"></a>1.2.&nbsp;La logique de fragmentation g&eacute;n&eacute;ralis&eacute;e</h2></div></div><div></div></div><p>Le but premier d'Hibernate Shards est de permettre aux d&eacute;veloppeurs
+        d'application d'interroger et de n&eacute;gocier des ensembles de donn&eacute;es fragment&eacute;s
+        en utilisant l'API standard d'Hibernate Core. Ceci permet aux applications
+        existantes qui utilisent Hibernate, mais pas encore la fragmentation, d'adopter
+        notre solution sans modification majeure s'ils atteignent cette &eacute;tape. Ceci
+        permet aussi aux d&eacute;veloppeurs d'application qui connaissent Hibernate, qui ont
+        besoin de fragmentation et qui partent de z&eacute;ro, de devenir productifs en un
+        minimum de temps parce qu'il n'y a pas besoin de d&eacute;couvrir un nouvel outil.
+        Avec cet objectif en t&ecirc;te, il n'est pas surprenant qu'Hibernate Shards
+        soit compos&eacute; principalement d'impl&eacute;mentations prenant en compte la fragmentation
+        de beaucoup d'interfaces d'Hibernate Core que vous connaissez et aimez.
+        </p><p>
+            La plupart du code applicatif en rapport avec Hibernate interagit avec
+            quatre interfaces fournies par Hibernate Core :
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Session</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.SessionFactory</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Criteria</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Query</tt>
+                    </p></li></ul></div><p>
+        </p><p>
+            Hibernate Shards fournit des extensions prenant en compte la fragmentation
+            &agrave; ces quatre interfaces, ainsi votre code n'a pas besoin de savoir qu'il
+            interagit avec un ensemble de donn&eacute;es fragment&eacute; (&agrave; moins, bien s&ucirc;r, que vous
+            ayez des raisons sp&eacute;cifiques pour r&eacute;v&eacute;ler ce fait). Les extensions sont :
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.session.ShardedSession</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.ShardedSessionFactory</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.criteria.ShardedCriteria</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.query.ShardedQuery</tt>
+                    </p></li></ul></div><p>
+            Les impl&eacute;mentations que nous fournissons pour ces quatre interfaces
+            servent de moteur &agrave; fragmentation, lequel conna&icirc;t la logique de fragmentation
+            sp&eacute;cifique &agrave; l'application &agrave; travers vos diff&eacute;rents stockages de donn&eacute;es.
+            Nous n'esp&eacute;rons pas que les d&eacute;veloppeurs d'application aient besoin
+            d'&eacute;crire trop de code qui interagit sciemment avec ces interfaces, donc si
+            vous vous retrouvez en train de d&eacute;clarer ou de passer des instances "Sharded",
+            revenez un pas en arri&egrave;re et regardez si vous ne pouvez pas plut&ocirc;t le faire avec
+            l'interface parente.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-application"></a>1.3.&nbsp;La logique de fragmentation sp&eacute;cifique &agrave; l'application</h2></div></div><div></div></div><p>
+            Chaque application qui utilise Hibernate Shards aura ses propres r&egrave;gles pour
+            r&eacute;partir ses donn&eacute;es &agrave; travers les fragments. Plut&ocirc;t que de tenter d'anticiper
+            toutes ces r&egrave;gles (effort pratiquement vou&eacute; &agrave; l'&eacute;chec), nous avons fourni
+            un ensemble d'interfaces derri&egrave;re lesquelles vous pouvez coder la logique
+            de distribution des donn&eacute;es de votre application. Ces interfaces sont :
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.selection.ShardSelectionStrategy</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.resolution.ShardResolutionStrategy</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.access.ShardAccessStrategy</tt>
+                    </p></li></ul></div><p>
+            Les impl&eacute;mentations que vous fournissez pour ces trois interfaces, plus
+            l'impl&eacute;mentation de la g&eacute;n&eacute;ration des identifiants que vous choisissez
+            (plus d'informations &agrave; ce sujet dans le chapitre "Strat&eacute;gie de fragmentation")
+            constituent la <span class="emphasis"><em>strat&eacute;gie de fragmentation</em></span> de votre
+            application.
+        </p><p>
+            Pour vous aider &agrave; mettre en place cela rapidement, Hibernate Shards arrive
+            avec deux impl&eacute;mentations simples de ces interfaces. Nous attendons qu'elles
+            vous aident dans votre prototypage ou dans les premi&egrave;res &eacute;tapes du d&eacute;veloppement
+            applicatif r&eacute;el, mais nous esp&eacute;rons aussi que, t&ocirc;t ou tard, la plupart des
+            applications fourniront leurs propres impl&eacute;mentations.
+        </p><p>Pour plus d'informations sur les strat&eacute;gies de fragmentation, veuillez consulter le chapitre du m&ecirc;me nom.</p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-requirements"></a>1.4.&nbsp;Pr&eacute;-requis syst&egrave;me</h2></div></div><div></div></div><p>
+          Hibernate Shards a les m&ecirc;mes pr&eacute;-requis qu'Hibernate Core, avec la restriction
+          suppl&eacute;mentaire qui exige Java 1.5 ou sup&eacute;rieur.
+        </p></div></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-configuration"></a>Chapitre&nbsp;2.&nbsp;Configuration</h2></div></div><div></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-configuration-overview"></a>2.1.&nbsp;Vue d'ensemble</h2></div></div><div></div></div><p>
+            Lors de l'utilisation d'Hibernate Shards, vous vous retrouvez la plupart du temps
+            en train de faire des appels typiques &agrave; l'API d'Hibernate Core. Cependant,
+            pour avoir votre source de donn&eacute;es fragment&eacute;es proprement configur&eacute;e,
+            vous aurez besoin de comprendre quelques concepts sp&eacute;cifiques &agrave; Hibernate
+            Shards. Nous pr&eacute;senterons ces nouveaux concepts dans le cadre d'un exemple
+            concret. Examinons le mod&egrave;le objet, le sch&eacute;ma de base de donn&eacute;es, et
+            le mapping que nous utiliserons dans nos exemples &agrave; travers la documentation.
+        </p><p>
+            Notre application d'exemple recevra des rapports m&eacute;t&eacute;orologiques de villes
+            du monde entier et stockera cette information dans une base de donn&eacute;es
+            relationnelles.
+        </p><div class="sect2" lang="fr"><div class="titlepage"><div><div><h3 class="title"><a name="shards-configuration-overview-sample-schema"></a>2.1.1.&nbsp;Sch&eacute;ma de base de donn&eacute;es d'un rapport m&eacute;t&eacute;orologique</h3></div></div><div></div></div><pre class="programlisting">
+CREATE TABLE WEATHER_REPORT (
+    REPORT_ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    CONTINENT ENUM('AFRICA', 'ANTARCTICA', 'ASIA', 'AUSTRALIA', 'EUROPE', 'NORTH AMERICA', 'SOUTH AMERICA'),
+    LATITUDE FLOAT,
+    LONGITUDE FLOAT,
+    TEMPERATURE INT,
+    REPORT_TIME TIMESTAMP
+);
+                </pre></div><div class="sect2" lang="fr"><div class="titlepage"><div><div><h3 class="title"><a name="shards-configuration-overview-sample-model"></a>2.1.2.&nbsp;Mod&egrave;le objet d'un rapport m&eacute;t&eacute;orologique</h3></div></div><div></div></div><pre class="programlisting">
+public class WeatherReport {
+    private Integer reportId;
+    private String continent;
+    private BigDecimal latitude;
+    private BigDecimal longitude;
+    private int temperature;
+    private Date reportTime;
+
+    ... // getters et setters
+}
+                </pre></div><div class="sect2" lang="fr"><div class="titlepage"><div><div><h3 class="title"><a name="shards-configuration-overview-sample-mapping"></a>2.1.3.&nbsp;Contenu de weather.hbm.xml</h3></div></div><div></div></div><pre class="programlisting">
+&lt;hibernate-mapping package="org.hibernate.shards.example.model"&gt;
+    &lt;class name="WeatherReport" table="WEATHER_REPORT"&gt;
+        &lt;id name="reportId" column="REPORT_ID"&gt;
+            &lt;generator class="native"/&gt;
+        &lt;/id&gt;
+        &lt;property name="continent" column="CONTINENT"/&gt;
+        &lt;property name="latitude" column="LATITUDE"/&gt;
+        &lt;property name="longitude" column="LONGITUDE"/&gt;
+        &lt;property name="temperature" column="TEMPERATURE"/&gt;
+        &lt;property name="reportTime" type="timestamp" column="REPORT_TIME"/&gt;
+    &lt;/class&gt;
+&lt;/hibernate-mapping&gt;
+                </pre></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-configuration-sf"></a>2.2.&nbsp;Obtenir une ShardedSessionFactory</h2></div></div><div></div></div><p>
+            Avant que nous vous montrions comment obtenir une
+            <tt class="classname">ShardedSessionFactory</tt>,
+            examinons le code qui vous permet d'avoir une
+            <tt class="classname">SessionFactory</tt> standard.
+            </p><pre class="programlisting">
+1    public SessionFactory createSessionFactory() {
+2        Configuration config = new Configuration();
+3        config.configure("weather.hibernate.cfg.xml");
+4        config.addResource("weather.hbm.xml");
+5        return config.buildSessionFactory();
+6    }
+</pre><p>
+            C'est assez simple. Nous instancions un nouvel objet
+            <tt class="classname">Configuration</tt> object (ligne 2), indiquons &agrave;
+            <tt class="classname">Configuration</tt> de lire ses propri&eacute;t&eacute;s &agrave;
+            partir d'une ressource nomm&eacute;e "weather.hibernate.cfg.xml" (ligne 3),
+            et ensuite fournissons
+            "weather.hbm.xml" comme une source de donn&eacute;es de mapping OR (ligne 4).
+            Nous demandons alors &agrave; <tt class="classname">Configuration</tt>
+            de construire une
+            <tt class="classname">SessionFactory</tt>, que nous retournons (ligne 5).
+        </p><p>
+            Regardons aussi le fichier de configuration que nous chargeons :
+            </p><pre class="programlisting">
+ 1    &lt;!-- Contenu de weather.hibernate.cfg.xml --&gt;
+ 2    &lt;hibernate-configuration&gt;
+ 3      &lt;session-factory name="HibernateSessionFactory"&gt;
+ 4        &lt;property name="dialect"&gt;org.hibernate.dialect.MySQLInnoDBDialect&lt;/property&gt;
+ 5        &lt;property name="connection.driver_class"&gt;com.mysql.jdbc.Driver&lt;/property&gt;
+ 6        &lt;property name="connection.url"&gt;jdbc:mysql://localhost:3306/mydb&lt;/property&gt;
+ 7        &lt;property name="connection.username"&gt;my_user&lt;/property&gt;
+ 8        &lt;property name="connection.password"&gt;my_password&lt;/property&gt;
+ 9      &lt;/session-factory&gt;
+ 10   &lt;/hibernate-configuration&gt;
+                </pre><p>
+        </p><p>
+            Comme vous pouvez le voir, il n'y a rien de particuli&egrave;rement int&eacute;ressant
+            dans le fichier de configuration ou le fichier de mapping.
+        </p><p>
+            Vous serez content d'apprendre que le processus de configuration de votre
+            application pout utiliser Hibernate Shards n'est pas radicalement diff&eacute;rent.
+            La principale diff&eacute;rence est que nous fournissons l'information de connexit&eacute;
+            pour plusieurs sources de donn&eacute;es, et nous d&eacute;crivons aussi le comportement
+            de fragmentation d&eacute;sir&eacute; via une
+            <tt class="classname">ShardStrategyFactory</tt>. Examinons une exemple de code
+            de configuration pour notre application de rapports m&eacute;t&eacute;orologiques,
+            que nous allons ex&eacute;cuter avec 3 fragments.
+            </p><pre class="programlisting">
+1     public SessionFactory createSessionFactory() {
+2         Configuration prototypeConfig = new Configuration().configure("shard0.hibernate.cfg.xml");
+3         prototypeConfig.addResource("weather.hbm.xml");
+4         List&lt;Configuration&gt; shardConfigs = new ArrayList&lt;Configuration&gt;();
+5         shardConfigs.add(new Configuration().configure("shard0.hibernate.cfg.xml"));
+6         shardConfigs.add(new Configuration().configure("shard1.hibernate.cfg.xml"));
+7         shardConfigs.add(new Configuration().configure("shard2.hibernate.cfg.xml"));
+8         ShardStrategyFactory shardStrategyFactory = buildShardStrategyFactory();
+9         ShardedConfiguration shardedConfig = new ShardedConfiguration(
+10            prototypeConfig,
+11            shardConfigs,
+12            shardStrategyFactory);
+13        return shardedConfig.buildShardedSessionFactory();
+14    }
+15
+16    ShardStrategyFactory buildShardStrategyFactory() {
+17        ShardStrategyFactory shardStrategyFactory = new ShardStrategyFactory() {
+18            public ShardStrategy newShardStrategy(List shardIds) {
+19                RoundRobinShardLoadBalancer loadBalancer = new RoundRobinShardLoadBalancer(shardIds);
+20                ShardSelectionStrategy pss = new RoundRobinShardSelectionStrategy(loadBalancer);
+21                ShardResolutionStrategy prs = new AllShardsShardResolutionStrategy(shardIds);
+22                ShardAccessStrategy pas = new SequentialShardAccessStrategy();
+23                return new ShardStrategyImpl(pss, prs, pas);
+24            }
+25        };
+26        return shardStrategyFactory;
+27    }
+  </pre><p>
+        </p><p>
+            Que se passe-t-il ici ? D'abord, vous noterez que nous allouons r&eacute;ellement
+            quatre <tt class="classname">Configurations</tt>. La premi&egrave;re <tt class="classname">Configuration</tt>
+            que nous allouons (ligne 2) est la <tt class="classname">Configuration</tt> prototype.
+            La <tt class="classname">ShardedSessionFactory</tt> que nous contruisons
+            &eacute;ventuellement (ligne 13) contiendra des r&eacute;f&eacute;rences aux 3 objets
+            <tt class="classname">SessionFactory</tt> standards. Chacun de ces 3 objets
+            <tt class="classname">SessionFactory</tt> standards aura &eacute;t&eacute; contruit &agrave; partir
+            de la configuration prototype. Les seuls attributs qui diff&eacute;reront de ces
+            objets <tt class="classname">SessionFactory</tt> standards sont :
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>connection.url</p></li><li style="list-style-type: circle"><p>connection.user</p></li><li style="list-style-type: circle"><p>connection.password</p></li></ul></div><p>
+            Les trois objets <tt class="classname">Configuration</tt> que nous chargeons
+            (lignes 5 &agrave; 7) seront consult&eacute;s pour l'url, l'utilisateur et le mot de
+            passe sp&eacute;cifiques aux bases de donn&eacute;es des fragments, et c'est tout. Ce qui
+            veut dire que si vous changez les param&egrave;tres du pool de connexions dans
+            shard1.hibernate.cfg.xml, ils seront ignor&eacute;s. Si vous ajoutez un autre fichier
+            de mapping &agrave; la <tt class="classname">Configuration</tt> charg&eacute;e avec les
+            propri&eacute;t&eacute;s d&eacute;finies dans shard2.hibernate.cfg.xml, il sera ignor&eacute;.
+            A l'exception des propri&eacute;t&eacute;s list&eacute;es plus haut, la configuration de notre
+            <tt class="classname">SessionFactory</tt> vient enti&egrave;rement de la
+            <tt class="classname">Configuration</tt> prototype. Ceci peut sembler un peu strict,
+            mais le code de fragmentation a besoin de supposer que tous les fragments
+            sont configur&eacute;s de la m&ecirc;me mani&egrave;re.
+        </p><p>
+            Si vous examinez ce code et pensez qu'il semble un peu trop stupide pour
+            fournir des documents de configuration pleinement form&eacute;s qui, pour &eacute;conomiser
+            deux propri&eacute;t&eacute;s sp&eacute;ciales, sont ignor&eacute;s, soyez rassur&eacute;s, nous avons regard&eacute;
+            ce code et pens&eacute; la m&ecirc;me chose. Nous pr&eacute;voyons de faire &eacute;voluer le m&eacute;canisme
+            de configuration. Nous avons choisi ce m&eacute;canisme-ci parce qu'il autorisait
+            la plus grande r&eacute;utilisation de code de configuration qui &eacute;tait d&eacute;j&agrave; disponible
+            dans Hibernate Core.
+        </p><p>
+            Une fois que nous avons construit nos objets
+            <tt class="classname">Configuration</tt>, nous avons besoin d'assembler
+            une <tt class="classname">ShardStrategyFactory</tt> (ligne 8). Une
+            <tt class="classname">ShardStrategyFactory</tt> est un objet qui sait comment
+            cr&eacute;er les 3 types de strat&eacute;gie que les programmeurs peuvent utiliser
+            pour contr&ocirc;ler le comportement de fragmentation du syst&egrave;me. Pour plus
+            d'informations &agrave; propos de ces strat&eacute;gies, veuillez regarder les
+            chapitres intitul&eacute;s "Strat&eacute;gies de fragmentation".
+        </p><p>
+            Maintenant que nous avons instanci&eacute; notre <tt class="classname">ShardStrategyFactory</tt>,
+            nous pouvons construire une <tt class="classname">ShardedConfiguration</tt> (ligne 9),
+            et une fois que nous avons notre <tt class="classname">ShardedConfiguration</tt> nous
+            pouvons lui demander de cr&eacute;er une <tt class="classname">ShardedSessionFactory</tt> (ligne 13).
+            Il est important de noter que <tt class="classname">ShardedSessionFactory</tt> &eacute;tend <tt class="classname">SessionFactory</tt>.
+            Ceci signifie que nous pouvons retourner une <tt class="classname">SessionFactory</tt> standard (ligne 1).
+            Le code Hibernate de notre application n'a pas besoin de savoir qu'il
+            interagit avec des donn&eacute;es fragment&eacute;es.
+        </p><p>
+            Examinons maintenant les fichiers de configuration et de mapping que nous
+            avons charg&eacute;. Vous les reconna&icirc;trez, mais il y a quelques ajouts et modifications clef
+            en rapport avec la fragmentation.
+            </p><pre class="programlisting">
+ 1    &lt;!-- Contenu de shard0.hibernate.cfg.xml --&gt;
+ 2    &lt;hibernate-configuration&gt;
+ 3      &lt;session-factory name="HibernateSessionFactory0"&gt; &lt;!-- notez le nom diff&eacute;rent --&gt;
+ 4        &lt;property name="dialect"&gt;org.hibernate.dialect.MySQLInnoDBDialect&lt;/property&gt;
+ 5        &lt;property name="connection.driver_class"&gt;com.mysql.jdbc.Driver&lt;/property&gt;
+ 6        &lt;property name="connection.url"&gt;jdbc:mysql://localhost:3306/mydb&lt;/property&gt;
+ 7        &lt;property name="connection.username"&gt;my_user&lt;/property&gt;
+ 8        &lt;property name="connection.password"&gt;my_password&lt;/property&gt;
+ 9        &lt;property name="hibernate.connection.shard_id"&gt;0&lt;/property&gt; &lt;!-- nouveau --&gt;
+ 10       &lt;property name="hibernate.shard.enable_cross_shard_relationship_checks"&gt;true&lt;/property&gt; &lt;!-- nouveau --&gt;
+ 11    &lt;/session-factory&gt;
+ 12  &lt;/hibernate-configuration&gt;
+                </pre><p>
+            </p><pre class="programlisting">
+ 1    &lt;!-- Contenu de shard1.hibernate.cfg.xml --&gt;
+ 2    &lt;hibernate-configuration&gt;
+ 3      &lt;session-factory name="HibernateSessionFactory1"&gt; &lt;!-- notez le nom diff&eacute;rent --&gt;
+ 4        &lt;property name="dialect"&gt;org.hibernate.dialect.MySQLInnoDBDialect&lt;/property&gt;
+ 5        &lt;property name="connection.driver_class"&gt;com.mysql.jdbc.Driver&lt;/property&gt;
+ 6        &lt;property name="connection.url"&gt;jdbc:mysql://localhost:3306/mydb&lt;/property&gt;
+ 7        &lt;property name="connection.username"&gt;my_user&lt;/property&gt;
+ 8        &lt;property name="connection.password"&gt;my_password&lt;/property&gt;
+ 9        &lt;property name="hibernate.connection.shard_id"&gt;1&lt;/property&gt; &lt;!-- nouveau --&gt;
+ 10       &lt;property name="hibernate.shard.enable_cross_shard_relationship_checks"&gt;true&lt;/property&gt; &lt;!-- nouveau --&gt;
+ 11    &lt;/session-factory&gt;
+ 12  &lt;/hibernate-configuration&gt;
+                </pre><p>
+            Nous passerons outre le contenu de shard2.hibernate.cfg.xml puisqu'il
+            devrait &ecirc;tre &eacute;vident. Nous donnons &agrave; chaque session factory un nom
+            unique via l'attribut "name" de l'&eacute;l&eacute;ment "session-factory", et nous leur
+            donnons aussi un identifiant de fragment. Ceci est obligatoire. Si vous
+            essayez de configurer une
+            <tt class="classname">ShardedSessionFactory</tt> avec un objet
+            <tt class="classname">Configuration</tt> qui n'a pas d'identifiant de fragment,
+            vous obtiendrez une erreur. Actuellement nous obligeons &agrave; ce que l'idenfiant de
+            fragment d'une des session factory soit 0. Au-del&agrave; de &ccedil;a, la repr&eacute;sentation
+            interne d'un identifiant de fragment est un, donc toutes les valeurs dans
+            cette plage sont l&eacute;gales. Finalement, chaque fragment qui est mapp&eacute; dans une
+            <tt class="classname">ShardedSessionFactory</tt> doit avoir un identifiant unique.
+            Si vous avez un fragment dupliqu&eacute;, vous aurez une erreur.
+        </p><p>
+            L'autre ajout notable est la propri&eacute;t&eacute;, plut&ocirc;t verbeuse mais heureusement descriptive,
+            "hibernate.shard.enable_cross_shard_relationship_checks.". Vous pouvez lire
+            d'avantage &agrave; ce propos dans le chapitre sur les limitations.
+        </p><p>
+            Maintenant regardons de nouveau comment le fichier de mapping a chang&eacute;.
+            </p><pre class="programlisting">
+&lt;hibernate-mapping package="org.hibernate.shards.example.model"&gt;
+    &lt;class name="WeatherReport" table="WEATHER_REPORT"&gt;
+        &lt;id name="reportId" column="REPORT_ID" type="long"&gt;
+            &lt;generator class="org.hibernate.shards.id.ShardedTableHiLoGenerator"/&gt;
+        &lt;/id&gt;
+        &lt;property name="continent" column="CONTINENT"/&gt;
+        &lt;property name="latitude" column="LATITUDE"/&gt;
+        &lt;property name="longitude" column="LONGITUDE"/&gt;
+        &lt;property name="temperature" column="TEMPERATURE"/&gt;
+        &lt;property name="reportTime" type="timestamp" column="REPORT_TIME"/&gt;
+    &lt;/class&gt;
+&lt;/hibernate-mapping&gt;
+                </pre><p>
+            Le seul changement signficatif dans le fichier de mapping par rapport &agrave; la
+            version sans fragmentation est dans notre s&eacute;lection d'un g&eacute;n&eacute;rateur
+            d'idenfitiant pour donn&eacute;es fragment&eacute;es. Nous couvrirons cette g&eacute;n&eacute;ration
+            d'identifiants plus en d&eacute;tail dans le chapitre sur les strat&eacute;gies de
+            fragmentation.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-configuration-limitations"></a>2.3.&nbsp;Limitations de la configuration</h2></div></div><div></div></div><p>
+            Beaucoup d'entre vous r&eacute;aliserons rapidement que le m&eacute;canisme de configuration
+            que nous avons fourni ne fonctionnera pas si vous configurez votre
+            <tt class="classname">SessionFactory</tt> via JPA ou Hibernate Annotations.
+            C'est vrai. Nous esp&eacute;rons que ces insuffisances seront corrig&eacute;es sous peu.
+        </p></div></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-shardstrategy"></a>Chapitre&nbsp;3.&nbsp;Shard Strategy</h2></div></div><div></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-overview"></a>3.1.&nbsp;Vue d'ensemble</h2></div></div><div></div></div><p>
+            Hibernate Shards vous donne une &eacute;norme flexibilit&eacute; pour configurer la
+            mani&egrave;re dont vos donn&eacute;es sont r&eacute;parties &agrave; travers vos fragments et la
+            fa&ccedil;on d'interroger vos donn&eacute;es &agrave; travers vos fragments. Le point d'entr&eacute;e
+            pour cette configuration est l'interface
+            <tt class="classname">org.hibernate.shards.strategy.ShardStrategy</tt> :
+            </p><pre class="programlisting">
+public interface ShardStrategy {
+    ShardSelectionStrategy getShardSelectionStrategy();
+    ShardResolutionStrategy getShardResolutionStrategy();
+    ShardAccessStrategy getShardAccessStrategy();
+}
+</pre><p>
+            Comme vous pouvez le voir, une
+            <tt class="classname">ShardStrategy</tt> est compos&eacute;e de trois sous-strat&eacute;gies.
+            Nous parlerons d'elles chacune leur tour.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-shardaccess"></a>3.2.&nbsp;ShardAccessStrategy</h2></div></div><div></div></div><p>
+            Nous commencerons avec la plus simple des strat&eacute;gies :
+            <tt class="classname">ShardAccessStrategy</tt>. Hibernate Shards utilise la
+            <tt class="classname">ShardAccessStrategy</tt> pour d&eacute;terminer comment appliquer
+            les op&eacute;rations de base de donn&eacute;es &agrave; travers plusieurs fragments. La
+            <tt class="classname">ShardAccessStrategy</tt> est consult&eacute;e lorsque vous
+            ex&eacute;cutez une requ&ecirc;te sur vos fragments. Nous avons d&eacute;j&agrave; fourni deux impl&eacute;mentations
+            de cette interface que nous pensons suffisantes pour la majorit&eacute; des applications.
+        </p><div class="sect2" lang="fr"><div class="titlepage"><div><div><h3 class="title"><a name="shards-strategy-shardaccess-seq"></a>3.2.1.&nbsp;SequentialShardAccessStrategy</h3></div></div><div></div></div><p>
+                <tt class="classname">SequentialShardAccessStrategy</tt> se comporte
+                exactement comme l'indique son nom : les requ&ecirc;tes sont ex&eacute;cut&eacute;es
+                en s&eacute;quence sur vos fragments. Selon le type de requ&ecirc;tes que vous
+                ex&eacute;cutez, vous pouvez vouloir &eacute;viter cette impl&eacute;mentation parce
+                qu'elle ex&eacute;cutera les requ&ecirc;tes &agrave; travers les fragments dans le m&ecirc;me
+                ordre &agrave; chaque fois. Si vous ex&eacute;cutez beaucoup de requ&ecirc;tes limit&eacute;es
+                en nombre de lignes retourn&eacute;es et non tri&eacute;es, ceci <span class="emphasis"><em>pourrait</em></span>
+                donner lieu &agrave; une pauvre utilisation de vos fragments (les fragments
+                apparaissant en t&ecirc;te de liste seront harcel&eacute;s, et ceux en fin de liste
+                resteront l&agrave; &agrave; ne rien faire, &agrave; se croiser les doigts). Si ceci vous
+                concerne, vous devriez plut&ocirc;t envisager d'utiliser la
+                <tt class="classname">LoadBalancedSequentialShardAccessStrategy</tt>.
+                Cette impl&eacute;mentation re&ccedil;oit une vue altern&eacute;e de vos fragments &agrave; chaque
+                invocation, et ainsi distribue &eacute;galement la charge de requ&ecirc;tes.
+            </p></div><div class="sect2" lang="fr"><div class="titlepage"><div><div><h3 class="title"><a name="shards-strategy-shardaccess-par"></a>3.2.2.&nbsp;ParallelShardAccessStrategy</h3></div></div><div></div></div><p>
+                <tt class="classname">ParallelShardAccessStrategy</tt> se comporte
+                exactement comme l'indique son nom : les requ&ecirc;tes sont ex&eacute;cut&eacute;es
+                sur les fragments en parall&egrave;le. Lorsque vous utilisez cette
+                impl&eacute;mentation, vous avez besoin de fournir un
+                <tt class="classname">java.util.concurrent.ThreadPoolExecutor</tt> qui
+                soit appropri&eacute; aux performances et aux besoins de votre application.
+                Voici un simple exemple :
+                </p><pre class="programlisting">
+    ThreadFactory factory = new ThreadFactory() {
+        public Thread newThread(Runnable r) {
+            Thread t = Executors.defaultThreadFactory().newThread(r);
+            t.setDaemon(true);
+            return t;
+        }
+    };
+
+    ThreadPoolExecutor exec =
+        new ThreadPoolExecutor(
+            10,
+            50,
+            60,
+            TimeUnit.SECONDS,
+            new SynchronousQueue&lt;Runnable&gt;(),
+            factory);
+
+    return new ParallelShardAccessStrategy(exec);
+    </pre><p>
+Veuillez noter que ce sont juste des valeurs d'exemple - une configuration propre
+d'un pool de threads va au-del&agrave; de la port&eacute;e de ce document.
+            </p></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-shardselection"></a>3.3.&nbsp;ShardSelectionStrategy</h2></div></div><div></div></div><p>
+            Hibernate Shards utilise la
+            <tt class="classname">ShardSelectionStrategy</tt> pour d&eacute;terminer le fragment
+            sur lequel un nouvel objet devrait &ecirc;tre cr&eacute;&eacute;. Il vous revient enti&egrave;rement
+            de d&eacute;cider &agrave; quoi doit ressembler l'impl&eacute;mentation de cette interface,
+            mais nous avons fourni une impl&eacute;mentation round-robin pour commencer
+            (<tt class="classname">RoundRobinShardSelectionStrategy</tt>). Nous esp&eacute;rons
+            que de nombreuses applications voudrons impl&eacute;menter une fragmentation
+            bas&eacute;e sur les attributs, ainsi pour notre application d'exemple qui
+            stocke les rapports m&eacute;t&eacute;o fragmentons les rapports par continent dont
+            les rapports sont originaires :
+            
+            </p><pre class="programlisting">
+public class WeatherReportShardSelectionStrategy implements ShardSelectionStrategy {
+    public ShardId selectShardIdForNewObject(Object obj) {
+        if(obj instanceof WeatherReport) {
+            return ((WeatherReport)obj).getContinent().getShardId();
+        }
+        throw new IllegalArgumentException();
+    }
+}
+</pre><p>
+
+        </p><p>
+            Il est important de noter que si un graphe d'objets multi-niveau est sauvegard&eacute;
+            via la fonctionnalit&eacute; de cascade d'Hibernate, la
+            <tt class="classname">ShardSelectionStrategy</tt> sera seulement consult&eacute;e
+            lors de la sauvegarde de l'objet de plus haut niveau. Tous les objets
+            enfants seront automatiquement sauvegard&eacute;s sur le m&ecirc;me fragment que le
+            parent. Vous pouvez trouver votre <tt class="classname">ShardSelectionStrategy</tt>
+            plus facile &agrave; impl&eacute;menter si vous emp&ecirc;cher les d&eacute;veloppeur de cr&eacute;er de
+            nouveaux objets &agrave; plus d'un niveau dans votre hi&eacute;rarchie d'objets. Vous
+            vous pouvez accomplir cela en informant votre <tt class="classname">ShardSelectionStrategy</tt>
+            des objets de plus haut niveau de votre mod&egrave;le, et ainsi lever une exception
+            si elle rencontre un objet qui ne fait pas partie de cet ensemble. Si vous
+            ne souhaitez pas imposer cette restriction, souvenez-vous juste que si
+            vous effectuez une s&eacute;lection des fragments bas&eacute;e sur les attributs, les
+            attributs que vous utilisez pour prendre votre d&eacute;cision ont besoin d'&ecirc;tre
+            disponibles sur chaque objet qui est pass&eacute; &agrave; session.save().
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-shardresolution"></a>3.4.&nbsp;ShardResolutionStrategy</h2></div></div><div></div></div><p>
+            Hibernate Shards utilise la
+            <tt class="classname">ShardResolutionStrategy</tt> pour d&eacute;terminer l'ensemble
+            des fragments sur lesquels un objet avec un identifiant donn&eacute; peut r&eacute;sider.
+            Revenons &agrave; notre application de rapports m&eacute;t&eacute;orologiques et supposons,
+            par exemple, que chaque continent a un &eacute;ventail d'identifiants qui lui
+            sont associ&eacute;s. N'importe quand nous assignons un identifiant &agrave; un WeatherReport,
+            nous en prenons un qui tombe dans l'intervalle l&eacute;gal pour le continent
+            auquel le WeatherReport appartient. Notre <tt class="classname">ShardResolutionStrategy</tt>
+            peut utiliser cette information pour identifier sur quel fragment un
+            WeatherReport r&eacute;side simplement en regardant l'identifiant :
+            </p><pre class="programlisting">
+public class WeatherReportShardResolutionStrategy extends AllShardsShardResolutionStrategy {
+    public WeatherReportShardResolutionStrategy(List&lt;ShardId&gt; shardIds) {
+        super(shardIds);
+    }
+
+    public List&lt;ShardId&gt; selectShardIdsFromShardResolutionStrategyData(
+            ShardResolutionStrategyData srsd) {
+        if(srsd.getEntityName().equals(WeatherReport.class.getName())) {
+            return Continent.getContinentByReportId(srsd.getId()).getShardId();
+        }
+        return super.selectShardIdsFromShardResolutionStrategyData(srsd);
+    }
+}
+</pre><p>
+            Il est int&eacute;ressant de montrer que nous n'avons pas (encore) impl&eacute;ment&eacute;
+            de cache qui mette en correspondance le nom de l'entit&eacute; et l'identifiant
+            du fragment, la <tt class="classname">ShardResolutionStrategy</tt> serait
+            un excellent endroit pour brancher un tel cache.
+        </p><p>
+            Shard Resolution est &eacute;troitement li&eacute; &agrave; la g&eacute;n&eacute;ration d'identifiants. Si
+            vous s&eacute;lectionnez un g&eacute;n&eacute;rateur d'identifiants pour votre classe qui code
+            l'identifiant du fragment dans l'identifiant de l'objet, votre
+            <tt class="classname">ShardResolutionStrategy</tt> ne sera plus jamais
+            appel&eacute;e. Si vous avez l'intention d'utiliser seulement des g&eacute;n&eacute;rateurs
+            d'identifiant qui codent l'identifiant du fragment dans les identifiants
+            de vos objets, vous devriez utiliser
+            <tt class="classname">AllShardsShardResolutionStrategy</tt> en tant que
+            <tt class="classname">ShardResolutionStrategy</tt>.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-idgen"></a>3.5.&nbsp;G&eacute;n&eacute;ration d'identifiants</h2></div></div><div></div></div><p>
+            Hibernate Sharding prend en charge n'importe quelle strat&eacute;gie de g&eacute;n&eacute;ration
+            d'identifiant ; le seul pr&eacute;-requis est que les identifiants d'objet soient
+            uniques &agrave; travers tous les fragments. Il y a quelques simples strat&eacute;gies
+            de g&eacute;n&eacute;ration d'identifiant qui prennent en charge ce pr&eacute;-requis :
+            </p><div class="itemizedlist"><ul type="disc"><li><p>
+                        <span class="emphasis"><em>G&eacute;n&eacute;ration native d'identifiants</em></span>
+                        - utilisez la strat&eacute;gie de g&eacute;n&eacute;ration d'identfiants
+                        <tt class="code">native</tt> d'Hibernate, et configurez vos bases
+                        de donn&eacute;es de mani&egrave;re &agrave; ce que les identifiants n'entrent
+                        jamais en collision. Par exemple, si vous utilisez la g&eacute;n&eacute;ration
+                        d'identifiants <tt class="code">identity</tt>, vous avez 5 bases de
+                        donn&eacute;es &agrave; travers lesquelles vous r&eacute;partirez les donn&eacute;es
+                        de mani&egrave;re &eacute;gale, et vous ne vous attendez pas &agrave; n'avoir
+                        jamais plus d'1 million d'enregistrements, vous pourriez
+                        configurer la base de donn&eacute;es 0 pour retourner des identifiants
+                        commen&ccedil;ant &agrave; 0, la base de donn&eacute;es 1 pour retourner des
+                        identifiants commen&ccedil;ant &agrave; 200000, la base de donn&eacute;es 2 pour
+                        retourner des identifiants commen&ccedil;ant &agrave; 400000, etc. Tant
+                        que vos suppositions concernant les donn&eacute;es sont correctes,
+                        les identifiants de vos objets n'entreront jamais en collision.
+                    </p></li><li><p>
+                        <span class="emphasis"><em>G&eacute;n&eacute;ration d'UUID au niveau applicatif</em></span>
+                        - par d&eacute;finition vous ne devez pas vous pr&eacute;occuper des collisions
+                        d'identifiants, mais vous avez besoin d'&ecirc;tre dispos&eacute; &agrave; traiter les
+                        clefs primaires peu maniables de nos objets.
+                    </p><p>
+                        Hibernate Shards fournit une impl&eacute;mentation d'un g&eacute;n&eacute;rateur d'UUID
+                        simple et prenant en compte les fragments -
+                        <tt class="classname">ShardedUUIDGenerator</tt>.
+                    </p></li><li><p>
+                        <span class="emphasis"><em>G&eacute;n&eacute;ration hilo r&eacute;partie</em></span>
+                        - l'id&eacute;e est d'avoir une table hilo sur un seul fragment, lequel assure
+                        que les identifiants g&eacute;n&eacute;r&eacute;s par l'algorithme hi/lo sont uniques &agrave; travers
+                        tous les fragments. Les deux principaux inconv&eacute;nients de cette approche
+                        sont que les acc&egrave;s &agrave; la table hilo peuvent devenir le goulot d'&eacute;tranglement
+                        dans la g&eacute;n&eacute;ration d'identifiants, et que stocker la table hilo sur
+                        une seule base de donn&eacute;es cr&eacute;e un seul point de panne du syst&egrave;me.
+                    </p><p>
+                        Hibernate Shards fournit une impl&eacute;mentation de l'algorithme de g&eacute;n&eacute;ration hilo r&eacute;partie -
+                        <tt class="classname">ShardedTableHiLoGenerator</tt>.  Cette impl&eacute;mentation est bas&eacute;e sur
+                        <tt class="classname">org.hibernate.id.TableHiLoGenerator</tt>, donc pour des informations
+                        sur la structure attendue de la table de la base de donn&eacute;es table de laquelle l'impl&eacute;mentation
+                        d&eacute;pend, veuillez lire la documentation de cette classe.
+                    </p></li></ul></div><p>
+        </p><p>
+            La g&eacute;n&eacute;ration d'identifiants est aussi &eacute;troitement li&eacute;e &agrave; la r&eacute;solution de fragment.
+            L'objectif de la r&eacute;solution de fragment est de trouve le fragment sur lequel vit un objet,
+            pour un identifiant d'objet donn&eacute;. Il y a deux mani&egrave;res d'accomplir cela :
+            </p><div class="itemizedlist"><ul type="disc"><li><p>Utiliser la
+                        <tt class="classname">ShardResolutionStrategy</tt>, d&eacute;crite au-dessus
+                    </p></li><li><p>Coder l'identifiant du fragment dans l'identifiant de l'objet durant
+                        la g&eacute;n&eacute;ration de l'identifiant, et r&eacute;cup&eacute;rer l'identifiant du fragment
+                        pendant la r&eacute;slution du fragment
+                    </p></li></ul></div><p>
+            Le principal avantage de coder l'identifiant du fragment dans l'identifiant
+            de l'objet est que cela permet &agrave; Hibernate Shards de r&eacute;soudre le fragment
+            &agrave; partir de l'identifiant de l'objet beaucoup plus rapidement, sans
+            recherche en base de donn&eacute;es, sans recherche dans un cache, etc. Hibernate
+            Shards ne requiert aucun algorithme sp&eacute;cifique pour coder/d&eacute;coder l'identifiant
+            d'un fragment - tout ce que vous avez&agrave; faire est d'utiliser un g&eacute;n&eacute;rateur
+            d'identifiants qui impl&eacute;mente l'interface
+            <tt class="classname">ShardEncodingIdentifierGenerator</tt>. Des deux g&eacute;n&eacute;rateurs
+            d'identifiants inclus dans Hibernate Shards, le
+            <tt class="classname">ShardedUUIDGenerator</tt>
+            impl&eacute;mente cette interface.
+        </p></div></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-resharding"></a>Chapitre&nbsp;4.&nbsp;Refragmentation</h2></div></div><div></div></div><p>
+        Quand un ensemble de donn&eacute;es d'une application grossit au-del&agrave; de la capacit&eacute;
+        des bases de donn&eacute;es allou&eacute;e &agrave; l'application, il devient n&eacute;cessaire d'ajouter
+        plus de bases de donn&eacute;es, et il est souvent d&eacute;sirable de redistribuer les
+        donn&eacute;es &agrave; travers les fragments (soit pour r&eacute;ussir une r&eacute;partition des charges
+        propre, soit pour satisfaire les invariants de l'application) : ceci s'appelle
+        la refragmentation. La refragmentation est probl&egrave;me compliqu&eacute;, et elle peut &ecirc;tre
+        la source de complication majeures dans la gestion de votre application de production
+        si elle n'est pas prise en compte durant la conception. Pour att&eacute;nuer le
+        supplice associ&eacute; &agrave; la refragmentation, Hibernate Shards fournit la prise en charge
+        de fragments virtuels.
+    </p><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-resharding-virtual"></a>4.1.&nbsp;Fragments virtuels</h2></div></div><div></div></div><p>
+            Dans le cas g&eacute;n&eacute;ral, chaque objet vit sur un fragment. Refragmenter consiste
+            en deux t&acirc;ches : d&eacute;placer l'objet vers un autre fragment, et changer les
+            mappings objet-fragment. Le mapping objet-fragment est captur&eacute; soit par
+            l'identifiant du fragment cod&eacute; dans l'identifiant de l'objet, soit par
+            la logique interne de la strat&eacute;gie de r&eacute;solution du fragment que l'objet utilise.
+            Dans le premier cas, refragmenter demanderait de changer tous les identifiants
+            des objets et les clefs &eacute;trang&egrave;res. Dans le second cas, refragmenter pourrait
+            demander n'importe quoi allant du changement de configuration d'ex&eacute;cution
+            d'une <tt class="classname">ShardResolutionStrategy</tt> donn&eacute;e au changement
+            d'algorithme de la <tt class="classname">ShardResolutionStrategy</tt>. Malheureusement,
+            le probl&egrave;me de changer des mappings objet-fragment devient m&ecirc;me pire une fois
+            que l'on prend en compte le fait que Hibernate Shards ne prend pas en
+            charge les relations &agrave; travers plusieurs fragments. Cette limitation nous
+            emp&ecirc;che de d&eacute;placer un sous-ensemble d'un graphe d'objets d'un fragment vers
+            un autre.
+        </p><p>
+            La t&acirc;che de changer de mapping objet-fragment peut &ecirc;tre simplifi&eacute;e en ajoutant
+            un niveau d'indirection - chaque objet vit sur un fragment virtuel, et chaque
+            fragment virtuel est mapp&eacute; vers un fragment physique. Durant la conception,
+            les d&eacute;veloppeurs doivent d&eacute;cider du nombre maximum de fragments physiques
+            dont l'application aura besoin. Ce maximum est alors utilis&eacute; comme le nombre
+            de fragments virtuels, et ces fragments virtuels sont alors mapp&eacute;s vers des
+            fragments physiques actuellement requis par l'application. Puisque tous les
+            <tt class="classname">ShardSelectionStrategy</tt>,
+            <tt class="classname">ShardResolutionStrategy</tt>, et
+            <tt class="classname">ShardEncodingIdentifierGenerator</tt> d'Hibernate Shards
+            op&egrave;rent sur des fragments virtuels, les objets seront r&eacute;partis correctement
+            &agrave; travers les fragments virtuels. Durant la refragmentation, les mappings
+            objet-fragment peuvent maintenant &ecirc;tre simplement modifi&eacute; en changeant les
+            mappings de fragments virtuels vers des fragments physiques.
+        </p><p>
+            Si vous vous inqui&eacute;tez &agrave; propos de l'estimation correcte du nombre maximum
+            de fragments physiques dont votre application a besoin, visez haut. Les
+            fragments virtuels ne co&ucirc;tent pas grand chose. En fin de compte, vous serez bien mieux
+            avec des fragments virtuels en trop plut&ocirc;t que de devoir en rajouter.
+        </p><p>
+            Pour activer la fragmentation virtuelle, vous avez besoin de cr&eacute;er votre
+            <tt class="classname">ShardedConfiguration</tt> avec une Map des identifiants
+            des fragments virtuels vers les identifiants des fragments physiques. Voici
+            un exemple o&ugrave; nous avons 4 fragments virtuels mapp&eacute;s vers 2 fragments physiques.
+</p><pre class="programlisting">
+Map&lt;Integer, Integer&gt; virtualShardMap = new HashMap&lt;Integer, Integer&gt;();
+virtualShardMap.put(0, 0);
+virtualShardMap.put(1, 0);
+virtualShardMap.put(2, 1);
+virtualShardMap.put(3, 1);
+ShardedConfiguration shardedConfig =
+    new ShardedConfiguration(
+        prototypeConfiguration,
+        configurations,
+        strategyFactory,
+        virtualShardMap);
+return shardedConfig.buildShardedSessionFactory();
+</pre><p>
+            Pour ensuite transformer le fragment virtuel en mapping de fragments physiques,
+            il faut seulement changer la <tt class="classname">virtualShardToShardMap</tt>
+            pass&eacute;e au constructeur.
+        </p><p>
+            Nous avons mentionn&eacute; que la deuxi&egrave;me t&acirc;che durant la repartition est de
+            d&eacute;placer les donn&eacute;es d'un fragment physique vers un autre. Hibernate Shards
+            n'essaie pas de fournir de prise en charge automatique pour cela puisque
+            c'est en g&eacute;n&eacute;ral tr&egrave;s sp&eacute;cifique &agrave; l'application, et la complexit&eacute; varie
+            selon le besoin potentiel de refragmentation &agrave; chaud, de l'architecture
+            de d&eacute;ploiement de l'application, etc.
+        </p></div></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-querying"></a>Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes</h2></div></div><div></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-overview"></a>5.1.&nbsp;Vue d'ensemble</h2></div></div><div></div></div><p>
+            Ex&eacute;cuter des requ&ecirc;tes &agrave; travers des fragments peut &ecirc;tre difficile. Dans
+            ce chapitre nous parlerons de ce qui fonctionne, ce qui ne fonctionne pas, et
+            ce que vous pouvez faire pour &eacute;viter les ennuis.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-criteria"></a>5.2.&nbsp;Criteria</h2></div></div><div></div></div><p>
+            Comme nous en avons parl&eacute; dans le chapitre sur les limitations, nous
+            n'avons pas encore d'impl&eacute;mentation compl&egrave;te de l'API Hibernate Core.
+            Cette limitation s'applique &agrave; <tt class="classname">ShardedCriteriaImpl</tt>,
+            qui est une impl&eacute;mentation de l'interface <tt class="classname">Criteria</tt>
+            prenant en compte les fragments. Dans ce chapitre nous n'entrerons pas dans
+            les d&eacute;tails des choses sp&eacute;cifiques qui n'ont pas &eacute;t&eacute; impl&eacute;ment&eacute;es. Nous
+            allons plut&ocirc;t discuter des types de requ&ecirc;tes <tt class="classname">Criteria</tt>
+            qui sont probl&eacute;matiques dans un environnement fragment&eacute;.
+        </p><p>
+            Dis simplement, les requ&ecirc;tes qui effectuent des tris posent probl&egrave;me. Pourquoi ?
+            Parce que nous ne pouvons pas retourner une liste proprement tri&eacute;e sans la
+            capacit&eacute; de comparer une valeur de la liste &agrave; toute autre valeur de la liste,
+            et la liste enti&egrave;re n'est pas disponible jusqu'&agrave; ce que tous les r&eacute;sultats
+            des requ&ecirc;tes individuelles aient &eacute;t&eacute; collect&eacute;s dans la partie applicative.
+            Le tri a besoin de s'effectuer &agrave; l'int&eacute;rieur d'Hibernate Shards, et pour
+            que cela arrive, nous demandons &agrave; tous les objets retourn&eacute;s par une requ&ecirc;te
+            <tt class="classname">Criteria</tt> avec une clause "order-by" d'impl&eacute;menter
+            l'interface <tt class="classname">Comparable</tt>. Si le type des objets que
+            vous retournez n'impl&eacute;mente pas cette interface, vous aurez une exception.
+        </p><p>
+            Les clauses "distinct" posent aussi probl&egrave;me. Tellement de probl&egrave;mes, en fait,
+            que pour le moment nous les prenons m&ecirc;me pas en charge. D&eacute;sol&eacute; pour &ccedil;a.
+        </p><p>
+            D'un autre c&ocirc;t&eacute;, alors que "distinct" et "order-by" posent probl&egrave;mes, les
+            agr&eacute;gats fonctionnent bien. Consid&eacute;rez l'exemple suivante :
+            </p><pre class="programlisting">
+        // r&eacute;cup&egrave;re la moyenne de toutes les temp&eacute;ratures enregistr&eacute;es depuis jeudi dernier
+        Criteria crit = session.createCriteria(WeatherReport.class);
+        crit.add(Restrictions.gt("timestamp", lastThursday));
+        crit.setProjection(Projections.avg("temperature"));
+        return crit.list();
+            </pre><p>
+            Dans un environnement avec un seul fragment, cette requ&ecirc;te peut obtenir
+            une r&eacute;ponse facilement, mais dans un environnement avec plusieurs fragments
+            c'est un peu plus emb&ecirc;tant. Pourquoi ? Parce qu'obtenir la moyenne de chaque
+            fragment n'est pas suffisant pour calculer la moyenne &agrave; travers tous les
+            fragments. Pour calculer ce morceau d'informations, nous n'avons pas seulement
+            besoin de la moyenne mais du nombre d'enregistrements de chaque fragment.
+            C'est exactement ce que nous faisons, et l'impact sur les performances
+            (faire un "count" suppl&eacute;mentaire dans chaque requ&ecirc;te) est probablement
+            n&eacute;gligeable. Maintenant, si nous voulions la m&eacute;diane, nous aurions des probl&egrave;mes
+            (ajouter le "count" &agrave; la requ&ecirc;te ne fournirait pas assez d'informations pour
+            r&eacute;aliser le calcul), mais pour le moment <tt class="classname">Criteria</tt>
+            n'expose pas de fonction m&eacute;diane, donc nous traiterons &ccedil;a lorsque cela
+            arrivera et sera un probl&egrave;me.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-hql"></a>5.3.&nbsp;HQL</h2></div></div><div></div></div><p>
+            Notre prise en charge de HQL n'est pas, pour le moment, aussi bon que
+            la prise en charge des requ&ecirc;tes <tt class="classname">Criteria</tt>. Nous n'avons
+            pas encore impl&eacute;ment&eacute; d'extensions &agrave; l'analyseur lexico-syntaxique de
+            requ&ecirc;tes, donc nous prenons pas en charge "distinct", "order-by", ou les agr&eacute;gats.
+            Cela signifie que vous pouvez seulement utiliser HQL pour des requ&ecirc;tes tr&egrave;s
+            simples. Vous feriez probablement mieux d'&eacute;viter le HQL de cette version
+            si vous le pouvez.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-strategy"></a>5.4.&nbsp;Use of Shard Strategy When Querying</h2></div></div><div></div></div><p>
+            Le seul composant de votre strat&eacute;gie de fragmentation qui est consult&eacute; lors
+            de l'ex&eacute;cution d'une requ&ecirc;te (<tt class="classname">Criteria</tt> ou HQL) est
+            la <tt class="classname">ShardAccessStrategy</tt>. <tt class="classname">ShardSelectionStrategy</tt>
+            est ignor&eacute;e parce qu'ex&eacute;cuter une requ&ecirc;te ne cr&eacute;e pas de nouvel enregistrement
+            dans la base de donn&eacute;es. <tt class="classname">ShardResolutionStrategy</tt>
+            est ignor&eacute;e parce qu'actuellement nous partons du principe que vous voulez
+            toujours que votre requ&ecirc;te soit ex&eacute;cut&eacute;e sur tous les fragments. Si ce n'est
+            pas le cas, la meilleure chose &agrave; faire de transtyper votre <tt class="classname">Session</tt>
+            en une <tt class="classname">ShardedSession</tt> et d'en extraire la <tt class="classname">Session</tt>
+            sp&eacute;cifique au fragment dont vous avez besoin. Maladroit, mais &ccedil;a fonctionne.
+            Nous proposerons une meilleure solution dans une prochaine version.
+        </p></div></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-limitations"></a>Chapitre&nbsp;6.&nbsp;Limitations</h2></div></div><div></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-api"></a>6.1.&nbsp;Impl&eacute;mentation incompl&egrave;te de l'API Hibernate</h2></div></div><div></div></div><p>
+            Pour acc&eacute;l&eacute;rer la sortie initiale d'Hibernate Shards, certaines parties
+            de l'API Hibernate que nous utilisons rarement n'ont pas &eacute;t&eacute; impl&eacute;ment&eacute;es.
+            Bien s&ucirc;r, des choses que nous utilisons rarement sont probablement critiques
+            pour d'autres applications, donc si nous vous avons d&eacute;laiss&eacute;, nous nous en excusons.
+            Nous pr&eacute;voyons d'impl&eacute;menter le reste de l'API rapidement. Pour savoir quelles
+            m&eacute;thodes ne sont pas impl&eacute;ment&eacute;es, veuillez voir la javadoc de
+            <tt class="classname">ShardedSessionImpl</tt>, <tt class="classname">ShardedCriteriaImpl</tt>,
+            et <tt class="classname">ShardedQueryImpl</tt>.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-cross-shard"></a>6.2.&nbsp;Graphes d'objets inter-fragments</h2></div></div><div></div></div><p>
+            Hibernate Shards ne prend pas en charge actuellement les graphes d'objets
+            inter-fragments.
+        </p><p>
+            En d'autres mots, il est ill&eacute;gal de cr&eacute;er une association entre des objets A et B
+            quand A et B vivent sur des fragments diff&eacute;rents. Pour contourner cela,
+            il faut d&eacute;finir une propri&eacute;t&eacute; sur A qui identifie de mani&egrave;re unique un
+            objet de type B, et l'utiliser pour charger un objet B (Vous souvenez-vous comment
+            la vie &eacute;tait avant Hibernate ? Oui, juste comme &ccedil;a).
+        </p><p>
+            Par exemple :
+            </p><pre class="programlisting">
+                --besoin d'un domaine pour les exemples--
+            </pre><p>
+        </p><p>
+            Dans certaines applications, votre mod&egrave;le peut &ecirc;tre construit de telle
+            mani&egrave;re qu'il est difficile de faire ce genre d'erreur, mais dans d'autres
+            &ccedil;a peut &ecirc;tre plus facile. La chose effrayante ici est que si vous fa&icirc;tes
+            cette erreur, Hibernate prendra en compte le "mauvais" objet dans la liste
+            pour en faire un nouvel objet et, supposant que vous avez activ&eacute; les
+            op&eacute;rations en cascade pour cette relation, cr&eacute;era une nouvelle version de
+            cet objet sur un fragment diff&eacute;rent. C'est le probl&egrave;me. Pour aider &agrave;
+            &eacute;viter ce genre de chose, nous avons un intercepteur appel&eacute;
+            <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt> qui
+            v&eacute;rifie les relations inter-fragments pour tous les objets qui sont
+            cr&eacute;&eacute;s ou sauvegarg&eacute;s.
+        </p><p>
+            Malheureusement il y a un co&ucirc;t associ&eacute; &agrave; l'utilisation de <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>.
+            Pour d&eacute;terminer le fragment sur lequel un objet associ&eacute; r&eacute;side, nous avons besoin de r&eacute;cup&eacute;rer
+            l'objet en base de donn&eacute;es, donc si vous avez des associations charg&eacute;es &agrave;
+            la demande l'intercepteur r&eacute;soudra ces associations comme partie de ses v&eacute;rifications.
+            C'est potentiellement assez co&ucirc;teux, et peut ne pas &ecirc;tre appropri&eacute; pour un
+            syst&egrave;me de production. Avec &ccedil;a en t&ecirc;te, nous avons simplifi&eacute; l'activation ou non
+            de cette v&eacute;rification via la propri&eacute;t&eacute; "hibernate.shard.enable_cross_shard_relationship_checks"
+            que nous avons r&eacute;f&eacute;renc&eacute; dans le chapitre sur la configuration. Si cette
+            propri&eacute;t&eacute; est positionn&eacute;e &agrave; "true", un <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>
+            sera inscrit &agrave; chaque <tt class="classname">ShardedSession</tt> cr&eacute;&eacute;e.
+            Ne vous inqui&eacute;tez pas, vous pouvez toujours inscrire votre propre intercepteur.
+            Notre attente est que la plupart des applications auront activ&eacute; cette
+            v&eacute;rification dans leurs environnements de d&eacute;veloppement et d'assurance qualit&eacute;,
+            et d&eacute;sactiv&eacute; dans leurs environnements de tests et de production.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-txns"></a>6.3.&nbsp;Transactions r&eacute;parties</h2></div></div><div></div></div><p>
+            Hibernate Shards ne fournit pas de prise en charge pour les transactions
+            r&eacute;parties dans un environnement non g&eacute;r&eacute;. Si votre application requiert
+            des transactions r&eacute;parties, vous avez besoin de brancher une impl&eacute;mentation
+            de gestion de transactions qui prend en charge les transactions r&eacute;parties.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-interceptors"></a>6.4.&nbsp;Intercepteurs &agrave; &eacute;tat</h2></div></div><div></div></div><p>
+            Nous avons fait de notre mieux pour que, dans l'ensemble, le code
+            d'Hibernate Core s'ex&eacute;cute bien lors de l'utilisation d'Hibernate Shards.
+            Il y a, malheureusement, des exceptions, et une d'entre elles est quand
+            votre application a besoin d'utliser un
+            <tt class="classname">org.hibernate.Interceptor</tt>
+            qui maintient son &eacute;tat.
+        </p><p>
+            Les intercepteurs &agrave; &eacute;tat (NdT : stateful) ont besoin d'un traitement particulier parce que,
+            sous le capot, nous instancions une
+            <tt class="classname">org.hibernate.SessionImpl</tt> par fragment. Si nous voulons un
+            <tt class="classname">Interceptor</tt> associ&eacute; &agrave; la
+            <tt class="classname">Session</tt>, nous avons besoin de passer par
+            l'<tt class="classname">Interceptor</tt>, quelqu'il soit, qui &eacute;tait fourni quand la
+            <tt class="classname">ShardedSession</tt> a &eacute;t&eacute; cr&eacute;&eacute;e. Si cet
+            <tt class="classname">Interceptor</tt> est &agrave; &eacute;tat, l'&eacute;tat de
+            l'<tt class="classname">Interceptor</tt> pour une
+            <tt class="classname">Session</tt> sera visible dans toutes les
+            <tt class="classname">Session</tt>s. Si vous r&eacute;fl&eacute;chissez aux choses qui sont typiquement faites dans des
+            <tt class="classname">Interceptor</tt>s &agrave; &eacute;tat (audit par exemple), vous pouvez voir comment
+            cela peut poser probl&egrave;me.
+        </p><p>
+            Notre solution est d'obliger les utilisateurs &agrave; fournir une
+            <tt class="classname">StatefulInterceptorFactory</tt> quand ils cr&eacute;ent leurs
+            objets <tt class="classname">Session</tt> (lesquels sont r&eacute;llement des
+            <tt class="classname">ShardedSession</tt>s). Si
+            l'<tt class="classname">Interceptor</tt> fourni impl&eacute;mente cette interface,
+            Hibernate Shards assurera qu'une nouvelle instance du type de
+            <tt class="classname">Interceptor</tt> retourn&eacute;e par
+            <tt class="classname">StatefulInterceptorFactory.newInstance()</tt> sera pass&eacute;e
+            &agrave; chaque <tt class="classname">Session</tt> qui est cr&eacute;&eacute;e sous le capot.
+            Voici un exemple :
+            </p><pre class="programlisting">
+public class MyStatefulInterceptorFactory extends BaseStatefulInterceptorFactory {
+    public Interceptor newInstance() {
+        return new MyInterceptor();
+    }
+}
+</pre><p>
+
+        </p><p>
+            Beaucoup d'impl&eacute;mentations d'<tt class="classname">Interceptor</tt> requi&egrave;rent
+            une r&eacute;f&eacute;rence &agrave; la <tt class="classname">Session</tt> &agrave; laquelle elles sont associ&eacute;es.
+            Dans le cas d'un <tt class="classname">Interceptor</tt> &agrave; &eacute;tat, vous voulez que
+            votre <tt class="classname">Interceptor</tt> ait une r&eacute;f&eacute;rence &agrave; la
+            <tt class="classname">Session</tt> r&eacute;elle (sp&eacute;cifique au fragment). Pour faciliter
+            cela, vous avez le choix d'avoir le type d'<tt class="classname">Interceptor</tt>
+            qui est construit par la <tt class="classname">StatefulInterceptorFactory</tt>
+            [...]
+            Si l'<tt class="classname">Interceptor</tt> contruit par la
+            <tt class="classname">StatefulInterceptorFactory</tt> impl&eacute;mente cette interface,
+            Hibernate Shards fournira
+            
+            to have a reference to the real (shard-specific) <tt class="classname">Session</tt>, not the shard-aware
+            <tt class="classname">Session</tt>. In order to facilitate this, you have the choice of having the type of
+            <tt class="classname">Interceptor</tt> that is constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implement the
+            <tt class="classname">RequiresSession</tt> interface.[...] If the
+            <tt class="classname">Interceptor</tt> constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implements this interface, Hibernate Shards will provide the
+            <tt class="classname">Interceptor</tt> with a reference to the real (shard-specific)
+            <tt class="classname">Session</tt> once the factory constructs it. This way your
+            <tt class="classname">Interceptor</tt> can safely and accurately interact with a specific shard.  Here's an example:
+            </p><pre class="programlisting">
+public class MyStatefulInterceptor implements Interceptor, RequiresSession {
+    private Session session;
+
+    public void setSession(Session session) {
+        this.session = session;
+    }
+
+    ... // Impl&eacute;mentation de l'interface Interceptor
+}
+</pre><p>
+        </p><p>
+            Vu la nature fondamentale du probl&egrave;me, nous ne nous attendons pas &agrave; changer cela de suite.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-base-ids"></a>6.5.&nbsp;Des objets avec des identifiants qui sont des types de base</h2></div></div><div></div></div><p>
+            Avec Hibernate, peu importe ce que vos objets du mod&egrave;le utilisent commen identifiant
+            tant qu'il peut &ecirc;tre repr&eacute;sent&eacute; par un <tt class="classname">Serializable</tt>
+            (ou encapsul&eacute; automatiquement dans un <tt class="classname">Serializable</tt>).
+            Avec Hibernate Shards vous &ecirc;tres l&eacute;g&egrave;rement plus contraints parce que nous
+            ne prenons pas en charge les types de base.
+        </p><p>
+            Ainsi, ceci n'est pas bon :
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private int weatherReportId;  // probl&egrave;me
+
+    public int getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(int id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            Mais ceci est adorable :
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private Integer weatherReportId;  // correct
+
+    public Integer getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(Integer id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            Avons-nous une bonne raison &agrave; cette limitation ? Pas r&eacute;ellement. C'est
+            le r&eacute;sultat d'un choix d'impl&eacute;mentation qui a filtr&eacute; et qui a un peu
+            aggrav&eacute; la vie de chacun. Si vous devez simplement utiliser
+            Hibernate Shards et mod&eacute;liser vos identifiants avec des types de base,
+            n'appelez pas <tt class="classname">Session.saveOrUpdate</tt>. Nous avons pour
+            objectif de trouver une solution &agrave; ce probl&egrave;me bient&ocirc;t et de vous laisser mod&eacute;liser
+            comme bon vous semble (malgr&eacute; cela, nous pr&eacute;f&eacute;rerions des identifiants objet parce
+            qu'ils permettent de d&eacute;terminer plus facilement si un objet s'est vu assigner
+            un identifiant ou pas).
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-replicated-data"></a>6.6.&nbsp;Donn&eacute;es r&eacute;pliqu&eacute;es</h2></div></div><div></div></div><p>
+            M&ecirc;me si c'est un framework pour le partionnement horizontal, il y a pratiquement
+            toujours des donn&eacute;es en lecture seules (ou du moins changeant rarement) qui vivent
+            dans chaque fragment. Si vous lisez juste ces entit&eacute;s nous n'avons pas de probl&egrave;me,
+            mais si vous voulez associer ces entit&eacute;s avec des entit&eacute;s fragment&eacute;es nous allons
+            avoir des probl&egrave;mes. Supposez que vous ayez une table Country sur chaque fragment avec
+            exactement les m&ecirc;mes donn&eacute;es, et supposez que WeatherReport a un membre Country.
+            Comment garantissons-nous que le Country que vous associez &agrave; ce WeatherReport
+            est associ&eacute; au m&ecirc;me fragment que celui du WeatherReport ? Si nous nous trompons,
+            nous finirons avec une relation entre plusieurs fragments, et ce n'est pas bien.
+        </p><p>
+            Nous avons des id&eacute;es pour rendre cela facile &agrave; traiter, mais nous ne les avons
+            pas encore impl&eacute;ment&eacute;es. Pour faire court, nous pensons qu'il est plus s&ucirc;r
+            pour vous de ne pas cr&eacute;er relations objet entre des entit&eacute;s fragment&eacute;es et
+            des entit&eacute;s r&eacute;pliqu&eacute;es. En d'autres mots, mod&eacute;lisez seulement la relation
+            comme vous feriez si vous n'utilisiez pas d'ORM. Nous savons que c'est
+            maladroit et annuyant. Nous nous en occuperons bient&ocirc;t.
+        </p></div></div></div></body></html>

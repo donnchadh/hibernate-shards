@@ -1,0 +1,878 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Hibernate Shards</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="book" lang="en"><div class="titlepage"><div><div><h1 class="title"><a name="d0e1"></a>Hibernate Shards</h1></div><div><h2 class="subtitle">Horizontal Partitioning With Hibernate</h2></div><div><h2 class="subtitle">Reference Guide</h2></div><div><p class="releaseinfo">3.0.0.Beta2</p></div></div><div></div><hr></div><div class="toc"><p><b>Table of Contents</b></p><dl><dt><span class="preface"><a href="#preface">Preface</a></span></dt><dt><span class="chapter"><a href="#shards-architecture">1. Architecture</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-architecture-overview">1.1. Overview</a></span></dt><dt><span class="sect1"><a href="#shards-architecture-general">1.2. Generalized Sharding Logic</a></span></dt><dt><span class="sect1"><a href="#shards-architecture-application">1.3. Application Specific Sharding Logic</a></span></dt><dt><span class="sect1"><a href="#shards-architecture-requirements">1.4. System Requirements</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-configuration">2. Configuration</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-configuration-overview">2.1. Overview</a></span></dt><dd><dl><dt><span class="sect2"><a href="#shards-configuration-overview-sample-schema">2.1.1. Weather Report Database Schema</a></span></dt><dt><span class="sect2"><a href="#shards-configuration-overview-sample-model">2.1.2. Weather Report Object Model</a></span></dt><dt><span class="sect2"><a href="#shards-configuration-overview-sample-mapping">2.1.3. Contents of weather.hbm.xml</a></span></dt></dl></dd><dt><span class="sect1"><a href="#shards-configuration-sf">2.2. Obtaining a ShardedSessionFactory</a></span></dt><dt><span class="sect1"><a href="#shards-configuration-anno">2.3. Using Hibernate Annotations With Shards</a></span></dt><dt><span class="sect1"><a href="#shards-configuration-limitations">2.4. Configuration Limitations</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-shardstrategy">3. Shard Strategy</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-strategy-overview">3.1. Overview</a></span></dt><dt><span class="sect1"><a href="#shards-strategy-shardaccess">3.2. ShardAccessStrategy</a></span></dt><dd><dl><dt><span class="sect2"><a href="#shards-strategy-shardaccess-seq">3.2.1. SequentialShardAccessStrategy</a></span></dt><dt><span class="sect2"><a href="#shards-strategy-shardaccess-par">3.2.2. ParallelShardAccessStrategy</a></span></dt></dl></dd><dt><span class="sect1"><a href="#shards-strategy-shardselection">3.3. ShardSelectionStrategy</a></span></dt><dt><span class="sect1"><a href="#shards-strategy-shardresolution">3.4. ShardResolutionStrategy</a></span></dt><dt><span class="sect1"><a href="#shards-strategy-idgen">3.5. ID Generation</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-resharding">4. Resharding</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-resharding-virtual">4.1. Virtual Shards</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-querying">5. Querying</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-querying-overview">5.1. Overview</a></span></dt><dt><span class="sect1"><a href="#shards-querying-criteria">5.2. Criteria</a></span></dt><dt><span class="sect1"><a href="#shards-querying-hql">5.3. HQL</a></span></dt><dt><span class="sect1"><a href="#shards-querying-strategy">5.4. Use of Shard Strategy When Querying</a></span></dt></dl></dd><dt><span class="chapter"><a href="#shards-limitations">6. Limitations</a></span></dt><dd><dl><dt><span class="sect1"><a href="#shards-limitations-api">6.1. Incomplete Implementation of Hibernate API</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-cross-shard">6.2. Cross-Shard Object Graphs</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-txns">6.3. Distributed Transactions</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-interceptors">6.4. Stateful Interceptors</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-base-ids">6.5. Objects With Ids That Are Base Types</a></span></dt><dt><span class="sect1"><a href="#shards-limitations-replicated-data">6.6. Replicated Data</a></span></dt></dl></dd></dl></div><div class="preface" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="preface"></a>Preface</h2></div></div><div></div></div><p>
+            You can't always put all your relational data in a single relational database.
+            Sometimes you simply have too much data. Sometimes you have a distributed deployment architecture
+            (network latency between California and India might be too high to have a single database). There might
+            even be non-technical reasons (a potential customer simply won't do the deal unless her company's data lives in its
+            own db instance). Whatever your reasons, talking to multiple relational databases inevitably complicates
+            the development of your application. Hibernate Shards is a framework that is designed to encapsulate and
+            minimize this complexity by adding support for
+            <a href="http://en.wikipedia.org/w/index.php?title=Partition_%28database%29&amp;oldid=99996308" target="_top">
+                horizontal partitioning
+            </a>
+            on top of Hibernate Core. Simply put, we aim to provide a unified view of multiple databases via Hibernate.
+        </p><p>
+            So what's a shard? Good question. "Shard" is just another word for "segment" or "partition," but
+            it's the term of choice within Google. Hibernate Shards was originally the
+            <a href="http://www.google.com/support/jobs/bin/static.py?page=about.html" target="_top">20 percent project</a>
+            of a small team of Google engineers, so the project nomenclature revolved around shards from the beginning.
+            We're open sourcing what we have so far because we want the Hibernate
+            community to be able to benefit from our efforts as soon as possible, but also with the hope and expectation
+            that this community will be able to help us reach a GA release much faster than if we kept this
+            under wraps. We fully expect to find glitches in both our design and implementation, and we appreciate your
+            patience as we work through them.
+        </p></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-architecture"></a>Chapter&nbsp;1.&nbsp;Architecture</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-overview"></a>1.1.&nbsp;Overview</h2></div></div><div></div></div><p>
+            Hibernate Shards is an extension to Hibernate Core that is designed to encapsulate and minimize the
+            complexity of working with sharded (horizontally partitioned) data. Hibernate Shards can be conceptually
+            divided into two areas, both of which you will need to understand in order to be successful. The two areas
+            are:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>Generalized sharding logic</p></li><li style="list-style-type: circle"><p>Application specific sharding logic</p></li></ul></div><p>
+            We'll discuss each of these areas in turn.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-general"></a>1.2.&nbsp;Generalized Sharding Logic</h2></div></div><div></div></div><p>The primary goal of Hibernate Shards is to enable application developers to query and transact against
+            sharded datasets using the standard Hibernate Core API. This allows existing applications that use Hibernate
+            but do not yet need sharding to adopt our solution without major refactoring if and when they do reach this
+            stage. This also allows application developers who are familiar with Hibernate, need sharding, and are starting from
+            scratch to become productive in a short amount of time because there will be no need to ramp-up on a new
+            toolset. With this goal in mind, it should come as no surprise that Hibernate Shards primarily consists of
+            shard-aware implementations of many of the Hibernate Core interfaces you already know and love.
+        </p><p>
+            Most Hibernate-related application code primarily interacts with four interfaces provided by Hibernate
+            Core:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Session</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.SessionFactory</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Criteria</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Query</tt>
+                    </p></li></ul></div><p>
+        </p><p>
+            Hibernate Shards provides shard-aware extensions of these four interfaces so that your code does not need to
+            know that it is interacting with a sharded dataset (unless of course you have specific reasons for exposing
+            this fact). The shard-aware extensions are:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.session.ShardedSession</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.ShardedSessionFactory</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.criteria.ShardedCriteria</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.query.ShardedQuery</tt>
+                    </p></li></ul></div><p>
+            The implementations we provide for these four shard-aware interfaces serve as a sharding engine that knows how to apply your
+            application-specific sharding logic across your various data stores. We don't expect application developers
+            to need to write much code that knowingly interacts with these interfaces, so if you do find yourself
+            declaring or passing around Sharded instances take a step back and see if you can make do with the parent
+            interface instead.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-application"></a>1.3.&nbsp;Application Specific Sharding Logic</h2></div></div><div></div></div><p>
+            Every application that uses Hibernate Shards will have its own rules for how data gets distributed across
+            its shards. Rather than attempt to anticipate all these rules (an effort practically guaranteed to fail) we
+            have instead provided a set of interfaces behind which you can encode your application's data distribution
+            logic. These interfaces are:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.selection.ShardSelectionStrategy</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.resolution.ShardResolutionStrategy</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.access.ShardAccessStrategy</tt>
+                    </p></li></ul></div><p>
+            The implementations you provide for these three interfaces plus the id generation implementation you choose
+            (more on this in the Sharding Strategy chapter) comprise the
+            <span class="emphasis"><em>Sharding Strategy</em></span>
+            for your application. The sharding engine described in the previous section knows how to use the Sharding
+            Strategy you provide.
+        </p><p>In order to help you get up and running quickly, Hibernate Shards comes with a couple simple
+            implementations of these interfaces. We expect that they will aid you in your prototyping or in the early
+            stages of actual application development, but we also expect that, sooner or later, most applications will
+            provide their own implementations.
+        </p><p>For more information on Sharding Strategies please consult the chapter of the same name.</p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-requirements"></a>1.4.&nbsp;System Requirements</h2></div></div><div></div></div><p>
+          Hibernate Shards has the same system requirements as Hibernate Core, with the additional restriction
+          that we require Java 1.5 or higher.
+        </p></div></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-configuration"></a>Chapter&nbsp;2.&nbsp;Configuration</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-configuration-overview"></a>2.1.&nbsp;Overview</h2></div></div><div></div></div><p>
+            When using Hibernate Shards you will find yourself making typical Hibernate Core API calls most of them
+            time. However, in order to get your shard-aware datasource properly configured you'll need to understand a
+            few concepts that are specific to Hibernate Shards. We'll introduce these new concepts as part of a concrete
+            example.  Let's take a look at the object model, database schema, and mapping we'll be using in our
+            examples throughout the documentation.
+        </p><p>
+            Our example application will receive weather reports from cities all over the world and store this information in a
+            relational database.
+        </p><div class="sect2" lang="en"><div class="titlepage"><div><div><h3 class="title"><a name="shards-configuration-overview-sample-schema"></a>2.1.1.&nbsp;Weather Report Database Schema</h3></div></div><div></div></div><pre class="programlisting">
+CREATE TABLE WEATHER_REPORT (
+    REPORT_ID INT NOT NULL AUTO_INCREMENT PRIMARY KEY,
+    CONTINENT ENUM('AFRICA', 'ANTARCTICA', 'ASIA', 'AUSTRALIA', 'EUROPE', 'NORTH AMERICA', 'SOUTH AMERICA'),
+    LATITUDE FLOAT,
+    LONGITUDE FLOAT,
+    TEMPERATURE INT,
+    REPORT_TIME TIMESTAMP
+);
+                </pre></div><div class="sect2" lang="en"><div class="titlepage"><div><div><h3 class="title"><a name="shards-configuration-overview-sample-model"></a>2.1.2.&nbsp;Weather Report Object Model</h3></div></div><div></div></div><pre class="programlisting">
+public class WeatherReport {
+    private Integer reportId;
+    private String continent;
+    private BigDecimal latitude;
+    private BigDecimal longitude;
+    private int temperature;
+    private Date reportTime;
+
+    ... // getters and setters
+}
+                </pre></div><div class="sect2" lang="en"><div class="titlepage"><div><div><h3 class="title"><a name="shards-configuration-overview-sample-mapping"></a>2.1.3.&nbsp;Contents of weather.hbm.xml</h3></div></div><div></div></div><pre class="programlisting">
+&lt;hibernate-mapping package="org.hibernate.shards.example.model"&gt;
+    &lt;class name="WeatherReport" table="WEATHER_REPORT"&gt;
+        &lt;id name="reportId" column="REPORT_ID"&gt;
+            &lt;generator class="native"/&gt;
+        &lt;/id&gt;
+        &lt;property name="continent" column="CONTINENT"/&gt;
+        &lt;property name="latitude" column="LATITUDE"/&gt;
+        &lt;property name="longitude" column="LONGITUDE"/&gt;
+        &lt;property name="temperature" column="TEMPERATURE"/&gt;
+        &lt;property name="reportTime" type="timestamp" column="REPORT_TIME"/&gt;
+    &lt;/class&gt;
+&lt;/hibernate-mapping&gt;
+                </pre></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-configuration-sf"></a>2.2.&nbsp;Obtaining a ShardedSessionFactory</h2></div></div><div></div></div><p>
+            Before we show you how to obtain a
+            <tt class="classname">ShardedSessionFactory</tt>
+            let's look at some code that allows you to obtain a standard
+            <tt class="classname">SessionFactory</tt>.
+            </p><pre class="programlisting">
+1    public SessionFactory createSessionFactory() {
+2        Configuration config = new Configuration();
+3        config.configure("weather.hibernate.cfg.xml");
+4        config.addResource("weather.hbm.xml");
+5        return config.buildSessionFactory();
+6    }
+</pre><p>
+            This is pretty straightforward. We're instantiating a new
+            <tt class="classname">Configuration</tt>
+            object (line 2), telling that
+            <tt class="classname">Configuration</tt>
+            to read
+            its properties from a resource named "weather.hibernate.cfg.xml" (line 3), and then providing
+            "weather.hbm.xml" as a source of OR
+            mapping data (line 4). We are then asking the
+            <tt class="classname">Configuration</tt>
+            to build a
+            <tt class="classname">SessionFactory</tt>, which we return (line 5).
+        </p><p>
+            Let's also take a look at the configuration file we're loading in:
+            </p><pre class="programlisting">
+ 1    &lt;!-- Contents of weather.hibernate.cfg.xml --&gt;
+ 2    &lt;hibernate-configuration&gt;
+ 3      &lt;session-factory name="HibernateSessionFactory"&gt;
+ 4        &lt;property name="dialect"&gt;org.hibernate.dialect.MySQLInnoDBDialect&lt;/property&gt;
+ 5        &lt;property name="connection.driver_class"&gt;com.mysql.jdbc.Driver&lt;/property&gt;
+ 6        &lt;property name="connection.url"&gt;jdbc:mysql://localhost:3306/mydb&lt;/property&gt;
+ 7        &lt;property name="connection.username"&gt;my_user&lt;/property&gt;
+ 8        &lt;property name="connection.password"&gt;my_password&lt;/property&gt;
+ 9      &lt;/session-factory&gt;
+ 10   &lt;/hibernate-configuration&gt;
+                </pre><p>
+        </p><p>
+            As you can see, there's nothing particularly interesting going on in the configuration file or the mapping
+            file.
+        </p><p>
+            You'll be pleased to know that the process of configuring your application to use Hibernate Shards is not
+            radically
+            different. The main difference is that we're providing connectivity information for multiple datasources,
+            and we're
+            also describing our desired sharding behavior via a
+            <tt class="classname">ShardStrategyFactory</tt>. Let's look at some sample configuration code for our weather
+            report application, which we're going to run with 3 shards.
+            </p><pre class="programlisting">
+1     public SessionFactory createSessionFactory() {
+2         Configuration prototypeConfig = new Configuration().configure("shard0.hibernate.cfg.xml");
+3         prototypeConfig.addResource("weather.hbm.xml");
+4         List&lt;ShardConfiguration&gt; shardConfigs = new ArrayList&lt;ShardConfiguration&gt;();
+5         shardConfigs.add(buildShardConfig("shard0.hibernate.cfg.xml"));
+6         shardConfigs.add(buildShardConfig("shard1.hibernate.cfg.xml"));
+7         shardConfigs.add(buildShardConfig("shard2.hibernate.cfg.xml"));
+8         ShardStrategyFactory shardStrategyFactory = buildShardStrategyFactory();
+9         ShardedConfiguration shardedConfig = new ShardedConfiguration(
+10            prototypeConfig,
+11            shardConfigs,
+12            shardStrategyFactory);
+13        return shardedConfig.buildShardedSessionFactory();
+14    }
+15
+16    ShardStrategyFactory buildShardStrategyFactory() {
+17        ShardStrategyFactory shardStrategyFactory = new ShardStrategyFactory() {
+18            public ShardStrategy newShardStrategy(List&lt;ShardId&gt; shardIds) {
+19                RoundRobinShardLoadBalancer loadBalancer = new RoundRobinShardLoadBalancer(shardIds);
+20                ShardSelectionStrategy pss = new RoundRobinShardSelectionStrategy(loadBalancer);
+21                ShardResolutionStrategy prs = new AllShardsShardResolutionStrategy(shardIds);
+22                ShardAccessStrategy pas = new SequentialShardAccessStrategy();
+23                return new ShardStrategyImpl(pss, prs, pas);
+24            }
+25        };
+26        return shardStrategyFactory;
+27    }
+28
+29    ShardConfiguration buildShardConfig(String configFile) {
+30        Configuration config = new Configuration().configure(configFile);
+31        return new ConfigurationToShardConfigurationAdapter(config);
+32    }
+  </pre><p>
+        </p><p>
+            So what's going on here? First, you'll notice that we're actually allocating four
+            <tt class="classname">Configurations</tt>. The first <tt class="classname">Configuration</tt>
+            we allocate (line 2) is the prototype <tt class="classname">Configuration</tt>. The
+            <tt class="classname">ShardedSessionFactory</tt>
+            we eventually construct (line 13) will contain references to 3 standard
+            <tt class="classname">SessionFactory</tt> objects. Each of these 3 standard
+            <tt class="classname">SessionFactory</tt> objects will have been constructed from the prototype configuration. The
+            only attributes that will differ across these standard <tt class="classname">SessionFactory</tt>
+            objects are:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>connection.url</p></li><li style="list-style-type: circle"><p>connection.user</p></li><li style="list-style-type: circle"><p>connection.password</p></li><li style="list-style-type: circle"><p>connection.datasource</p></li><li style="list-style-type: circle"><p>cache.region_prefix</p></li></ul></div><p>
+            The three <tt class="classname">ShardConfiguration</tt> objects we're loading (lines 5 - 7) will be consulted for the
+            shard-specific database url, database user, database password, datasource identifier, cache region prefix, and that's all.
+            (For a discussion of what these properties are and how they are used, please consult the Hibernate Core documentation.)
+            This means that if you change the
+            connection pool parameters in shard1.hibernate.cfg.xml, those parameters will be ignored. If you add another
+            mapping file to the <tt class="classname">Configuration</tt>
+            loaded with the properties defined in shard2.hibernate.cfg.xml, that mapping will be ignored.
+            With the exception of the properties listed above, the configuration of our shard-aware
+            <tt class="classname">SessionFactory</tt> comes entirely from the prototype
+            <tt class="classname">Configuration</tt>. This may seem a bit strict, but the sharding code
+            needs to assume that all shards are identically configured.
+        </p><p>
+            If you're looking at this code and thinking it seems a bit silly to provide fully-formed configuration
+            documents that, save a couple special properties, are ignored, rest assured we've looked at this code and
+            thought the same thing.  That's why the <tt class="classname">ShardedConfiguration</tt> constructor takes
+            a <tt class="classname">List&lt;ShardConfiguration&gt;</tt> as opposed to a
+            <tt class="classname">List&lt;Configuration&gt;</tt>.  <tt class="classname">ShardConfiguration</tt>
+            is an interface so you can make the shard-specific configuration data available any way you'd like.  In our example
+            we're using an implementation of this interface that wraps a standard <tt class="classname">Configuration</tt>
+            (line 31) just to avoid introducing any unfamiliar configuration mechanisms.
+        </p><p>
+            Once we've built our <tt class="classname">Configuration</tt>
+            objects we need to put together a <tt class="classname">ShardStrategyFactory</tt>
+            (line 8). A <tt class="classname">ShardStrategyFactory</tt>
+            is an object that knows how to create the 3 types of strategies that programmers can use to control the sharding
+            behavior of the system. For more information on these strategies please see the chapters titled Sharding Strategies.
+        </p><p>
+            Once we've instantiated our <tt class="classname">ShardStrategyFactory</tt> we can construct a
+            <tt class="classname">ShardedConfiguration</tt> (line 9), and once we've constructed
+            our <tt class="classname">ShardedConfiguration</tt> we can ask it to create a
+            <tt class="classname">ShardedSessionFactory</tt> (line 13). It's important to note that
+            <tt class="classname">ShardedSessionFactory</tt> extends <tt class="classname">SessionFactory</tt>. This means we can return a standard
+            <tt class="classname">SessionFactory</tt> (line 1). Our application's Hibernate code doesn't need
+            to know that it's interacting with sharded data.
+        </p><p>
+            Now let's take a look at the configuration and mapping files that we loaded in. You'll definitely recognize
+            them, but there are a few key additions and modifications related to sharding.
+            </p><pre class="programlisting">
+ 1    &lt;!-- Contents of shard0.hibernate.cfg.xml --&gt;
+ 2    &lt;hibernate-configuration&gt;
+ 3      &lt;session-factory name="HibernateSessionFactory0"&gt; &lt;!-- note the different name --&gt;
+ 4        &lt;property name="dialect"&gt;org.hibernate.dialect.MySQLInnoDBDialect&lt;/property&gt;
+ 5        &lt;property name="connection.driver_class"&gt;com.mysql.jdbc.Driver&lt;/property&gt;
+ 6        &lt;property name="connection.url"&gt;jdbc:mysql://dbhost0:3306/mydb&lt;/property&gt;
+ 7        &lt;property name="connection.username"&gt;my_user&lt;/property&gt;
+ 8        &lt;property name="connection.password"&gt;my_password&lt;/property&gt;
+ 9        &lt;property name="hibernate.connection.shard_id"&gt;0&lt;/property&gt; &lt;!-- new --&gt;
+ 10      &lt;property name="hibernate.shard.enable_cross_shard_relationship_checks"&gt;true&lt;/property&gt; &lt;!-- new --&gt;
+ 11    &lt;/session-factory&gt;
+ 12  &lt;/hibernate-configuration&gt;
+                </pre><p>
+            </p><pre class="programlisting">
+ 1    &lt;!-- Contents of shard1.hibernate.cfg.xml --&gt;
+ 2    &lt;hibernate-configuration&gt;
+ 3      &lt;session-factory name="HibernateSessionFactory1"&gt; &lt;!-- note the different name --&gt;
+ 4        &lt;property name="dialect"&gt;org.hibernate.dialect.MySQLInnoDBDialect&lt;/property&gt;
+ 5        &lt;property name="connection.driver_class"&gt;com.mysql.jdbc.Driver&lt;/property&gt;
+ 6        &lt;property name="connection.url"&gt;jdbc:mysql://dbhost1:3306/mydb&lt;/property&gt;
+ 7        &lt;property name="connection.username"&gt;my_user&lt;/property&gt;
+ 8        &lt;property name="connection.password"&gt;my_password&lt;/property&gt;
+ 9        &lt;property name="hibernate.connection.shard_id"&gt;1&lt;/property&gt; &lt;!-- new --&gt;
+ 10      &lt;property name="hibernate.shard.enable_cross_shard_relationship_checks"&gt;true&lt;/property&gt; &lt;!-- new --&gt;
+ 11    &lt;/session-factory&gt;
+ 12  &lt;/hibernate-configuration&gt;
+                </pre><p>
+            We'll skip the contents of shard2.hibernate.cfg.xml because the pattern should by now be obvious. We're
+            giving each session factory a unique name via the name attribute of the session-factory element,
+            and we're associating each session factory with a different database server.  We're
+            also giving each session factory a shard id. This is required. If you try to configure a
+            <tt class="classname">ShardedSessionFactory</tt> with a <tt class="classname">Configuration</tt>
+            object that does not have a shard id you'll get an error. At the moment we require that the shard id of one
+            of your session factories be 0. Beyond that, the internal representation of a shard id is a
+            <tt class="classname">java.lang.Integer</tt> so all values within that range are legal. Finally, each shard that is mapped into a
+            <tt class="classname">ShardedSessionFactory</tt> must have a unique shard id. If you have a duplicate shard id you'll get an error.
+        </p><p>
+            The other noteworthy addition is the rather verbose but hopefully descriptive
+            "hibernate.shard.enable_cross_shard_relationship_checks." You can read more about this in the
+            chapter on limitations.
+        </p><p>
+            Now let's still see how the mapping file has changed.
+            </p><pre class="programlisting">
+&lt;hibernate-mapping package="org.hibernate.shards.example.model"&gt;
+    &lt;class name="WeatherReport" table="WEATHER_REPORT"&gt;
+        &lt;id name="reportId" column="REPORT_ID" type="long"&gt;
+            &lt;generator class="org.hibernate.shards.id.ShardedTableHiLoGenerator"/&gt;
+        &lt;/id&gt;
+        &lt;property name="continent" column="CONTINENT"/&gt;
+        &lt;property name="latitude" column="LATITUDE"/&gt;
+        &lt;property name="longitude" column="LONGITUDE"/&gt;
+        &lt;property name="temperature" column="TEMPERATURE"/&gt;
+        &lt;property name="reportTime" type="timestamp" column="REPORT_TIME"/&gt;
+    &lt;/class&gt;
+&lt;/hibernate-mapping&gt;
+                </pre><p>
+            The only meaningful change in the mapping file from the non-sharded version is in our selection of a
+            shard-aware id generator. We'll cover id generation in more detail in the chapter on Shard Strategies.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-configuration-anno"></a>2.3.&nbsp;Using Hibernate Annotations With Shards</h2></div></div><div></div></div><p>
+            In the above example we're using Hibernate mapping files (hbm.xml)
+            to specify our mappings, but it's just as easy to use Hibernate
+            Annotations.  We can annotate our <tt class="classname">WeatherReport</tt>
+            class as follows:
+            </p><pre class="programlisting">
+@Entity
+@Table(name="WEATHER_REPORT")
+public class WeatherReport {
+
+    @Id @GeneratedValue(generator="WeatherReportIdGenerator")
+    @GenericGenerator(name="WeatherReportIdGenerator", strategy="org.hibernate.shards.id.ShardedUUIDGenerator")
+    @Column(name="REPORT_ID")
+    private Integer reportId;
+
+    @Column(name="CONTINENT")
+    private String continent;
+
+    @Column(name="LATITUDE")
+    private BigDecimal latitude;
+
+    @Column(name="LONGITUDE")
+    private BigDecimal longitude;
+
+    @Column(name="TEMPERATURE")
+    private int temperature;
+
+    @Column(name="REPORT_TIME")
+    private Date reportTime;
+
+    ... // getters and setters
+}
+</pre><p>
+            This is a pretty standard use of Hibernate Annotations.  The only
+            thing here that's particularly noteworthy is the use of the
+            <tt class="classname">GenericGenerator</tt> annotation, which is part
+            of Hibernate Annotations but not JPA.  We need this to specify our
+            shard-aware id generator.
+         </p><p>
+            The changes we now need to make to the <tt class="code">createSessionFactory()</tt>
+            method we implemented above are actually quite small:
+           </p><pre class="programlisting">
+ 1     public SessionFactory createSessionFactory() {
+ 2         AnnotationConfiguration prototypeConfig = new AnnotationConfiguration().configure("shard0.hibernate.cfg.xml");
+ 3         prototypeConfig.addAnnotatedClass(WeatherReport.class);
+ 4         List&lt;ShardConfiguration&gt; shardConfigs = new ArrayList&lt;ShardConfiguration&gt;();
+ 5         shardConfigs.add(buildShardConfig("shard0.hibernate.cfg.xml"));
+ 6         shardConfigs.add(buildShardConfig("shard1.hibernate.cfg.xml"));
+ 7         shardConfigs.add(buildShardConfig("shard2.hibernate.cfg.xml"));
+ 8         ShardStrategyFactory shardStrategyFactory = buildShardStrategyFactory();
+ 9         ShardedConfiguration shardedConfig = new ShardedConfiguration(
+ 10            prototypeConfig,
+ 11            shardConfigs,
+ 12            shardStrategyFactory);
+ 13        return shardedConfig.buildShardedSessionFactory();
+ 14    }
+ </pre><p>
+           The only changes between this method and the non-annotated versions
+           are on lines 2 and 3.  On line 2 we're declaring and instantiating an
+           <tt class="classname">AnnotationConfiguration</tt> instead of a
+           <tt class="classname">Configuration</tt>, and on line 3 we're adding
+           an annotated class to the configuration instead of an xml mapping file.
+           That's it!
+         </p><p>
+           Please note that while Hibernate Shards works with Hibernate Annotations,
+           Hibernate Shards does not ship with Hibernate Annotations.  You'll need
+           to download Hibernate Annotations and its dependencies separately.
+         </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-configuration-limitations"></a>2.4.&nbsp;Configuration Limitations</h2></div></div><div></div></div><p>
+            Many of you will quickly realize that the configuration mechanism we've provided won't work if you're
+            configuring your <tt class="classname">SessionFactory</tt>
+            via JPA. It's true. We expect this deficiency to be addressed shortly.
+        </p></div></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-shardstrategy"></a>Chapter&nbsp;3.&nbsp;Shard Strategy</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-overview"></a>3.1.&nbsp;Overview</h2></div></div><div></div></div><p>
+            Hibernate Shards gives you enormous flexibility in configuring how your data is distributed across your
+            shards and how your data is queried across your shards. The entry point for this configuration is the
+            <tt class="classname">org.hibernate.shards.strategy.ShardStrategy</tt> interface:
+            </p><pre class="programlisting">
+public interface ShardStrategy {
+    ShardSelectionStrategy getShardSelectionStrategy();
+    ShardResolutionStrategy getShardResolutionStrategy();
+    ShardAccessStrategy getShardAccessStrategy();
+}
+</pre><p>
+            As you can see, a
+            <tt class="classname">ShardStrategy</tt>
+            is comprised of three sub-strategies. We'll discuss each of these in turn.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-shardaccess"></a>3.2.&nbsp;ShardAccessStrategy</h2></div></div><div></div></div><p>
+            We'll start with the most simple of the strategies:
+            <tt class="classname">ShardAccessStrategy</tt>. Hibernate Shards uses the
+            <tt class="classname">ShardAccessStrategy</tt>
+            to determine how to apply database operations across multiple shards. The
+            <tt class="classname">ShardAccessStrategy</tt>
+            is consulted whenever you execute a query against your shards. We've already provided two implementations of
+            this interface that we expect will suffice for the majority of applications.
+        </p><div class="sect2" lang="en"><div class="titlepage"><div><div><h3 class="title"><a name="shards-strategy-shardaccess-seq"></a>3.2.1.&nbsp;SequentialShardAccessStrategy</h3></div></div><div></div></div><p>
+                <tt class="classname">SequentialShardAccessStrategy</tt>
+                behaves in the exact way that is implied by its name: queries are executed against your shards in
+                sequence. Depending on the types of queries you execute you may want to avoid this implementation
+                because it will execute queries against your shards in the same order every time. If you execute a lot
+                of row-limited, unordered queries this
+                <span class="emphasis"><em>could</em></span>
+                result in poor utilization across your shards (shards that appear early in your list will get hammered
+                and shards that appear late will sit idly by, twiddling their shard-thumbs). If this is a concern you
+                should consider using the
+                <tt class="classname">LoadBalancedSequentialShardAccessStrategy</tt>
+                instead. This implementation receives a rotated view of your shards on each invocation, thereby
+                distributing query load evenly.
+            </p></div><div class="sect2" lang="en"><div class="titlepage"><div><div><h3 class="title"><a name="shards-strategy-shardaccess-par"></a>3.2.2.&nbsp;ParallelShardAccessStrategy</h3></div></div><div></div></div><p>
+                <tt class="classname">ParallelShardAccessStrategy</tt>
+                also behaves in the exact way that is implied by its name: queries are executed against your shards in
+                parallel. When you use this implementation you need to provide a
+                <tt class="classname">java.util.concurrent.ThreadPoolExecutor</tt>
+                that is suitable for the performance and throughput needs of your application.
+                Here's a simple example:
+                </p><pre class="programlisting">
+    ThreadFactory factory = new ThreadFactory() {
+        public Thread newThread(Runnable r) {
+            Thread t = Executors.defaultThreadFactory().newThread(r);
+            t.setDaemon(true);
+            return t;
+        }
+    };
+
+    ThreadPoolExecutor exec =
+        new ThreadPoolExecutor(
+            10,
+            50,
+            60,
+            TimeUnit.SECONDS,
+            new SynchronousQueue&lt;Runnable&gt;(),
+            factory);
+
+    return new ParallelShardAccessStrategy(exec);
+    </pre><p>
+Please note that these are just sample values - proper thread pool configuration is beyond the scope of this document.  
+            </p></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-shardselection"></a>3.3.&nbsp;ShardSelectionStrategy</h2></div></div><div></div></div><p>
+            Hibernate Shards uses the
+            <tt class="classname">ShardSelectionStrategy</tt>
+            to determine the shard on which a new object should be created. It's entirely up to you to decide what you
+            want your implementation of this interface to look like, but we've provided a round-robin implementation to
+            get you started (<tt class="classname">RoundRobinShardSelectionStrategy</tt>). We expect many applications will
+            want to implement attribute-based sharding, so for our example
+            application that stores weather reports let's shard reports by the continents on which the reports originate:
+            </p><pre class="programlisting">
+public class WeatherReportShardSelectionStrategy implements ShardSelectionStrategy {
+    public ShardId selectShardIdForNewObject(Object obj) {
+        if(obj instanceof WeatherReport) {
+            return ((WeatherReport)obj).getContinent().getShardId();
+        }
+        throw new IllegalArgumentException();
+    }
+}
+</pre><p>
+
+        </p><p>
+            It's important to note that if a multi-level object graph is being saved via Hibernate's cascading
+            functionality, the
+            <tt class="classname">ShardSelectionStrategy</tt>
+            will only be consulted when saving the top-level object. All child objects will automatically be saved to
+            the same shard as the parent. You may find your
+            <tt class="classname">ShardSelectionStrategy</tt>
+            easier to implement if you prevent developers from creating new objects at more than one level in your
+            object hierarchy. You can accomplish this by making your
+            <tt class="classname">ShardSelectionStrategy</tt>
+            implementation aware of the top-level objects in your model and having it throw an exception if it
+            encounters an object that is not in this set. If you do not wish to impose this restriction that's fine,
+            just remember that if you're doing attribute-based shard selection, the attributes you use to make your
+            decision need to be available on every object that gets passed to session.save().
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-shardresolution"></a>3.4.&nbsp;ShardResolutionStrategy</h2></div></div><div></div></div><p>
+            Hibernate Shards uses the
+            <tt class="classname">ShardResolutionStrategy</tt>
+            to determine the set of shards on which an object with a given id might reside. Let's go back to our weather
+            report application and suppose, for example, that each continent has a range of ids associated with it.
+            Whenever we assign an id to a WeatherReport we pick one that falls within the legal range for the continent
+            to which the WeatherReport belongs. Our
+            <tt class="classname">ShardResolutionStrategy</tt>
+            can use this information to identify which shard a WeatherReport resides on simply by looking at the id:
+            </p><pre class="programlisting">
+public class WeatherReportShardResolutionStrategy extends AllShardsShardResolutionStrategy {
+    public WeatherReportShardResolutionStrategy(List&lt;ShardId&gt; shardIds) {
+        super(shardIds);
+    }
+
+    public List&lt;ShardId&gt; selectShardIdsFromShardResolutionStrategyData(
+            ShardResolutionStrategyData srsd) {
+        if(srsd.getEntityName().equals(WeatherReport.class.getName())) {
+            return Continent.getContinentByReportId(srsd.getId()).getShardId();
+        }
+        return super.selectShardIdsFromShardResolutionStrategyData(srsd);
+    }
+}
+</pre><p>
+            It's worth pointing out that while we have not (yet) implemented a cache that maps entity name/id to shard,
+            the
+            <tt class="classname">ShardResolutionStrategy</tt>
+            would be an excellent place to plug in such a cache.
+        </p><p>
+            Shard Resolution is tightly tied to ID Generation. If you select an ID Generator for your class that encodes
+            the shard id in the id of the object, your
+            <tt class="classname">ShardResolutionStrategy</tt>
+            will never even be called. If you plan to only use ID Generators that encode the shard id in the ids of your
+            object you should use
+            <tt class="classname">AllShardsShardResolutionStrategy</tt>
+            as your
+            <tt class="classname">ShardResolutionStrategy</tt>.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-strategy-idgen"></a>3.5.&nbsp;ID Generation</h2></div></div><div></div></div><p>
+            Hibernate Sharding supports any ID generation strategy; the only requirement is that
+            object IDs have to be unique across all the shards. There are a few simple ID
+            generation strategies which support this requirement:
+            </p><div class="itemizedlist"><ul type="disc"><li><p>
+                        <span class="emphasis"><em>Native ID generation</em></span>
+                        - use Hibernate's
+                        <tt class="code">native</tt>
+                        ID generation strategy, and configure your databases so
+                        that the IDs never collide. For example, if you are using
+                        <tt class="code">identity</tt>
+                        ID generation, you have 5 databases across which you will
+                        evenly distribute the data, and you don't expect you will ever have more
+                        than 1 million records, you could configure database 0 to return IDs
+                        starting at 0, configure database 1 to return IDs starting at 200000,
+                        configure database 2 to return IDs starting at 400000, and so on. As long as
+                        your assumptions about the data are correct, the IDs of your objects would
+                        never collide.
+                    </p></li><li><p>
+                        <span class="emphasis"><em>Application-level UUID generation</em></span>
+                        - by definition you
+                        don't have to worry about ID collisions, but you do need to be willing to
+                        deal with potentially unwieldy primary keys for your objects.
+                    </p><p>
+                        Hibernate Shards provides an implementation of a simple, shard-aware UUID generator -
+                        <tt class="classname">ShardedUUIDGenerator</tt>.
+                    </p></li><li><p>
+                        <span class="emphasis"><em>Distributed hilo generation</em></span>
+                        - the idea is to have a
+                        hilo table on only one shard, which ensures that the identifiers generated
+                        by the hi/lo algorithm are unique across all shards. Two main drawbacks of
+                        this approach are that the access to the hilo table can become the
+                        bottleneck in ID generation, and that storing the hilo table on a single
+                        database creates a single point of failure of the system.
+                    </p><p>
+                        Hibernate Shards provides an implementation of a distributed hilo generation algorithm -
+                        <tt class="classname">ShardedTableHiLoGenerator</tt>.  This implementation is based on
+                        <tt class="classname">org.hibernate.id.TableHiLoGenerator</tt>, so for
+                        information on the expected structure of the database table on which the implementation
+                        depends please see the documentation for this class.
+                    </p></li></ul></div><p>
+        </p><p>
+            ID generation is also tightly tied with the shard resolution. The objective of shard
+            resolution is to find the shard an object lives on, given the object's ID. There are
+            two ways to accomplish this objective:
+            </p><div class="itemizedlist"><ul type="disc"><li><p>Use the
+                        <tt class="classname">ShardResolutionStrategy</tt>, described above
+                    </p></li><li><p>Encode the shard ID into the object ID during the ID generation,
+                        and retrieve the shard ID during shard resolution
+                    </p></li></ul></div><p>
+            The main advantage of encoding the shard ID into the object ID is that it
+            enables Hibernate Shards
+            to resolve the shard from the object's ID much faster without database
+            lookups, cache lookups, etc. Hibernate Shards does not require any specific
+            algorithm for encoding/decoding of the shard ID - all you have to do is use an ID
+            generator that implements the
+            <tt class="classname">ShardEncodingIdentifierGenerator</tt>
+            interface. Of the two ID generators included with Hibernate Shards, the
+            <tt class="classname">ShardedUUIDGenerator</tt>
+            implements this interface.
+        </p></div></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-resharding"></a>Chapter&nbsp;4.&nbsp;Resharding</h2></div></div><div></div></div><p>
+        When an application's dataset grows beyond the capacity of the databases
+        originally allocated to the application it becomes necessary to add more databases, and
+        it is often desirable to redistribute the data across the shards (either to achieve
+        proper load balancing or to satisfy application invariants) - this is
+        called
+        resharding. Resharding is a complicated problem, and it has the potential to cause major
+        complications in the management of your production application if it is not considered during the design.
+        In order to ease some of the pain associated with resharding, Hibernate
+        Shards provides support for virtual shards.
+    </p><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-resharding-virtual"></a>4.1.&nbsp;Virtual Shards</h2></div></div><div></div></div><p>
+            In the general case, each object lives on a shard. Resharding consists
+            of two tasks: moving the object to another shard, and changing
+            object-shard mappings. The object-shard mapping is captured either by the shard ID
+            encoded into the object ID or by the internal logic of the shard
+            resolution strategy which the object uses. In the former case, resharding would require
+            changing all the object IDs and FKs. In the latter case, resharding could
+            require anything from changing the runtime configuration of a given
+            <tt class="classname">ShardResolutionStrategy</tt>
+            to changing the algorithm of the
+            <tt class="classname">ShardResolutionStrategy</tt>. Unfortunately, the problem of changing object-shard
+            mappings becomes even worse once we consider the fact that Hibernate Shards does not support cross-shard
+            relationships. This limitation prevents us from moving a subset of an object graph from one shard to
+            another.
+        </p><p>
+            The task of changing object-shard mappings can be simplified by adding a level
+            of indirection - each object lives on a virtual shard, and each virtual shard is mapped to
+            one physical shard. During design, developers must decide on the maximum number of physical shards
+            the application will ever require.  This maximum is then used as the number of virtual shards, and these
+            virtual shards are then mapped to the physical shards currently required by the application.
+            Since Hibernate
+            Shards'
+            <tt class="classname">ShardSelectionStrategy</tt>,
+            <tt class="classname">ShardResolutionStrategy</tt>, and
+            <tt class="classname">ShardEncodingIdentifierGenerator</tt>
+            all operate on virtual shards, the
+            objects will correctly be distributed across virtual shards. During resharding,
+            object-shard mappings can now simply be changed by changing virtual shard to physical shard
+            mappings.
+        </p><p>
+            If you're worried about correctly estimating the maximum number of physical shards your application
+            will ever require, aim high.  Virtual shards are cheap.  Down the road you'll be much better off with extra
+            virtual than if you have to add virtual shards.
+        </p><p>
+            In order to enable virtual sharding you need to create your <tt class="classname">ShardedConfiguration</tt>
+            with a Map from virtual shard ids to physical shard ids.  Here's an example where we have 4 virtual
+            shards mapped to 2 physical shards.
+</p><pre class="programlisting">
+Map&lt;Integer, Integer&gt; virtualShardMap = new HashMap&lt;Integer, Integer&gt;();
+virtualShardMap.put(0, 0);
+virtualShardMap.put(1, 0);
+virtualShardMap.put(2, 1);
+virtualShardMap.put(3, 1);
+ShardedConfiguration shardedConfig =
+    new ShardedConfiguration(
+        prototypeConfiguration,
+        configurations,
+        strategyFactory,
+        virtualShardMap);
+return shardedConfig.buildShardedSessionFactory();
+</pre><p>
+            In order to change the
+            virtual shard to physical shard mapping later on it is only necessary to change the
+            <tt class="classname">virtualShardToShardMap</tt> passed to this constructor.
+        </p><p>
+            We mentioned that the second task during resharding is moving data from one
+            physical shard to another. Hibernate Shards does not try to provide
+            automatic support for this as this is usually very application-specific, and
+            complexity varies based on the potential need for hot-resharding, deployment
+            architecture of the application, etc.
+        </p></div></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-querying"></a>Chapter&nbsp;5.&nbsp;Querying</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-overview"></a>5.1.&nbsp;Overview</h2></div></div><div></div></div><p>
+            Executing queries across shards can be hard.  In this chapter we'll discuss what works,
+            what doesn't, and what you can do to stay out of trouble.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-criteria"></a>5.2.&nbsp;Criteria</h2></div></div><div></div></div><p>
+            As we discuss in the chapter on Limitations, we do not yet have a complete implementation of the
+            Hibernate Core API.  This limitation applies to <tt class="classname">ShardedCriteriaImpl</tt>,
+            which is a shard-aware implementation of the <tt class="classname">Criteria</tt> interface.
+            In this chapter we won't go into the details of specific things that haven't been implemented.
+            Rather, we're going to discuss the types of <tt class="classname">Criteria</tt> queries that are
+            problematic in a sharded environment.
+        </p><p>
+            Simply put, queries that do sorting are trouble.  Why?  Because we can't return a properly
+            sorted list without the ability to compare any value in the list to any other value in the list,
+            and the entire list isn't available until the results of the individual queries have been
+            collected in the application tier.  The sorting needs to take place inside Hibernate Shards, and
+            in order for this to happen we require that all objects returned by a <tt class="classname">Criteria</tt>
+            query with an order-by clause implement the <tt class="classname">Comparable</tt> interface.
+            If the type of the objects you return do not implement this interface you'll receive an
+            exception.
+        </p><p>
+            Distinct clauses are trouble as well.  So much trouble, in fact, that at the moment we don't
+            even support them.  Sorry about that.
+        </p><p>
+            On the other hand, while distinct and order-by are trouble, aggregation works just fine.
+            Consider the following example:
+            </p><pre class="programlisting">
+        // fetch the average of all temperatures recorded since last thursday
+        Criteria crit = session.createCriteria(WeatherReport.class);
+        crit.add(Restrictions.gt("timestamp", lastThursday));
+        crit.setProjection(Projections.avg("temperature"));
+        return crit.list();
+            </pre><p>
+            In a single-shard environment this query can be easily answered, but in a multi-shard
+            environment it's a little bit trickier.  Why?  Because just getting the average from each
+            shard isn't enough to calculate the average across all shards.  In order to calculate this
+            piece of information we need not just the average but the number of records from each shard.
+            This is exactly what we do, and the performance hit (doing an extra count as part of
+            each query) is probably negligible.
+            Now, if we wanted the median
+            we'd be in trouble (just adding the count to the query would not provide enough information
+            to perform the calculation), but at the moment <tt class="classname">Criteria</tt> doesn't expose
+            a median function so we'll deal with that if and when it becomes and issue.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-hql"></a>5.3.&nbsp;HQL</h2></div></div><div></div></div><p>
+            Our support for HQL is, at this point, not nearly as good as the support we have for <tt class="classname">Criteria</tt>
+            queries.  We have not yet implemented any extensions to the query parser, so we don't support
+            distinct, order-by, or aggregations.  This means you can only use HQL for very simple queries.  You're
+            probably better off staying clear of HQL in this release if you can help it.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-strategy"></a>5.4.&nbsp;Use of Shard Strategy When Querying</h2></div></div><div></div></div><p>
+            The only component of your shard strategy that is consulted when executing a query (<tt class="classname">Criteria</tt>
+            or HQL) is the <tt class="classname">ShardAccessStrategy</tt>.  <tt class="classname">ShardSelectionStrategy</tt>
+            is ignored because executing a query doesn't create any new records in the database.  <tt class="classname">ShardResolutionStrategy</tt>
+            is ignored because we currently assume that you always want your query executed on all shards.  If this
+            isn't the case, the best thing to do is just downcast your <tt class="classname">Session</tt> to a <tt class="classname">ShardedSession</tt>
+            and dig out the shard-specific <tt class="classname">Session</tt>s you need.  Clunky, but it works.  We'll
+            come up with a better solution for this in later releases.
+        </p></div></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-limitations"></a>Chapter&nbsp;6.&nbsp;Limitations</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-api"></a>6.1.&nbsp;Incomplete Implementation of Hibernate API</h2></div></div><div></div></div><p>
+            In order to speed-up the initial release of Hibernate Shards, some
+            parts of the Hibernate API that we rarely use were left unimplemented. Of course things that
+            we rarely used are probably critical for some applications, so if we've left you out in the cold
+            we apologize. We're committed to getting the rest of the API implemented quickly. For details on which
+            methods were not implemented, please see the Javadoc for <tt class="classname">ShardedSessionImpl</tt>,
+            <tt class="classname">ShardedCriteriaImpl</tt>, and <tt class="classname">ShardedQueryImpl</tt>.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-cross-shard"></a>6.2.&nbsp;Cross-Shard Object Graphs</h2></div></div><div></div></div><p>
+            Hibernate Shards does not currently support cross-shard object graphs.
+        </p><p>
+            In other words, it is illegal to create an association between objects A and B when A and B
+            live on different shards. The workaround is to define a property on A which uniquely identifies an
+            object of type B, and to use that property to load object B (remember what life was like
+            before Hibernate? Yeah, just like that.)
+        </p><p>
+            For example:
+            </p><pre class="programlisting">
+                --need domain for examples--
+            </pre><p>
+        </p><p>
+            In some applications your model may be constructed in such a way that it is difficult to make this kind
+            of mistake, but in some applications it may be easier. The scary thing here is that if you make this
+            mistake, Hibernate will consider the "bad" object in the list to be a new object and, assuming you have
+            cascades enabled for this relationship, it will create a new version of this object on a different shard.
+            This is trouble. In order to help prevent this sort of thing from happening we have an interceptor
+            called <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt> that checks for cross-shard
+            relationships on every object that is created or saved.
+        </p><p>
+            Unfortunately there is a cost associated with using the <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>.
+            In order to determine the shard on which an associated object resides we need to fetch the object from the
+            database, so if you have lazy-loaded associations the interceptor will resolve those associations as part
+            of its checks.  This is potentially quite expensive, and may not be suitable for a production system.
+            With this in mind, we've made it easy to configure whether or not this check is performed via the
+            "hibernate.shard.enable_cross_shard_relationship_checks" property we referenced in the chapter
+            on configuration.  If this property is set to "true" a <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>
+            will be registered with every <tt class="classname">ShardedSession</tt> that is established.  Don't worry,
+            you can still register your own interceptor as well.  Our expectation is that most applications will have
+            this check enabled in their dev and qa environments and disabled in their staging, load and performance,
+            and production environments.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-txns"></a>6.3.&nbsp;Distributed Transactions</h2></div></div><div></div></div><p>
+            Hibernate Shards does not provide support for distributed transactions within
+            a non-managed environment.  If your application requires
+            distributed transactions you need to plug in a transaction management implementation that supports
+            distributed transactions.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-interceptors"></a>6.4.&nbsp;Stateful Interceptors</h2></div></div><div></div></div><p>
+            We've done our best to make sure that, by and large, Hibernate Core code runs just fine when using Hibernate
+            Shards. There are, unfortunately, exceptions, and one of those exceptions is when your application needs
+            to use an
+            <tt class="classname">org.hibernate.Interceptor</tt>
+            that maintains state.
+        </p><p>
+            Stateful interceptors need special handling because, under the hood, we're instantiating one
+            <tt class="classname">org.hibernate.SessionImpl</tt> per shard. If we want an
+            <tt class="classname">Interceptor</tt> associated with the
+            <tt class="classname">Session</tt>, we need to pass in whatever
+            <tt class="classname">Interceptor</tt> was provided when the
+            <tt class="classname">ShardedSession</tt> was created. If that
+            <tt class="classname">Interceptor</tt> is stateful, the
+            <tt class="classname">Interceptor</tt> state for one
+            <tt class="classname">Session</tt> will be visible in all
+            <tt class="classname">Sessions</tt>. When you consider the sorts of things that are typically done in stateful
+            <tt class="classname">Interceptors</tt> (auditing for example), you can see how this can pose a problem.
+        </p><p>
+            Our solution is to require users to provide a
+            <tt class="classname">StatefulInterceptorFactory</tt> when they establish their
+            <tt class="classname">Session</tt> objects (which are really
+            <tt class="classname">ShardedSessions</tt>).  If the provided
+            <tt class="classname">Interceptor</tt> implements this interface, Hibernate Shards will ensure that a
+            fresh instance of the type of <tt class="classname">Interceptor</tt>
+            returned by <tt class="classname">StatefulInterceptorFactory.newInstance()</tt>
+            will be passed to each <tt class="classname">Session</tt>
+            that is established under the hood.  Here's an example:
+            </p><pre class="programlisting">
+public class MyStatefulInterceptorFactory extends BaseStatefulInterceptorFactory {
+    public Interceptor newInstance() {
+        return new MyInterceptor();
+    }
+}
+</pre><p>
+
+        </p><p>
+            Many <tt class="classname">Interceptor</tt> implementations require a reference to the
+            <tt class="classname">Session</tt> with which they're associated. In the case of a stateful
+            <tt class="classname">Interceptor</tt>, you want your <tt class="classname">Interceptor</tt>
+            to have a reference to the real (shard-specific) <tt class="classname">Session</tt>, not the shard-aware
+            <tt class="classname">Session</tt>. In order to facilitate this, you have the choice of having the type of
+            <tt class="classname">Interceptor</tt> that is constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implement the
+            <tt class="classname">RequiresSession</tt> interface. If the
+            <tt class="classname">Interceptor</tt> constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implements this interface, Hibernate Shards will provide the
+            <tt class="classname">Interceptor</tt> with a reference to the real (shard-specific)
+            <tt class="classname">Session</tt> once the factory constructs it. This way your
+            <tt class="classname">Interceptor</tt> can safely and accurately interact with a specific shard.  Here's an example:
+            </p><pre class="programlisting">
+public class MyStatefulInterceptor implements Interceptor, RequiresSession {
+    private Session session;
+
+    public void setSession(Session session) {
+        this.session = session;
+    }
+
+    ... // Interceptor interface impl
+}
+</pre><p>
+        </p><p>
+            Due to the basic nature of the problem we don't expect this to change anytime soon.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-base-ids"></a>6.5.&nbsp;Objects With Ids That Are Base Types</h2></div></div><div></div></div><p>
+            With Hibernate your model objects can use whatever they want as their ids so long as the id can be
+            represented by a <tt class="classname">Serializable</tt> (or autoboxed into a
+            <tt class="classname">Serializable</tt>). With Hibernate Shards you are slightly more constrained
+            because we don't support base types.
+        </p><p>
+            So this is no good:
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private int weatherReportId;  // trouble
+
+    public int getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(int id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            But this is just lovely:
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private Integer weatherReportId;  // goodness
+
+    public Integer getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(Integer id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            Do we have a good reason for this limitation? Not really. It's the result of an implementation
+            choice that has leaked out and made everyone's lives a tiny bit worse. If you simply must
+            use Hibernate Shards and you simply must model your ids with base types, don't call
+            <tt class="classname">Session.saveOrUpdate</tt>. We aim to address this leak soon and let you get back
+            to modeling whatever way you like (although for the record, we prefer object ids because
+            they make it easy to determine whether or not an object has had an id assigned).
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-replicated-data"></a>6.6.&nbsp;Replicated Data</h2></div></div><div></div></div><p>
+            Even though this is a framework for horizontal partitioning, there is almost always
+            read-only (or at least slow changing) data that lives on every shard. If you're just
+            reading these entities we don't have a problem, but if you want to associate these
+            entities with sharded entities we run into trouble. Suppose you have a Country table
+            on every shard with the exact same data, and suppose WeatherReport has a Country member.
+            How do we guarantee that the Country you associate with that WeatherReport is associated
+            with the same shard as the WeatherReport? If we get it wrong we'll end up with a cross-shard
+            relationship, and that's bad.
+        </p><p>We have a number
+            of ideas about how to make this easy to deal with but we have not yet implemented any of them.
+            In the short term, we think your best bet is to either not create object relationships between
+            sharded entities and replicated entities. In other words, just model the relationship like
+            you would if you weren't using an OR Mapping tool. We know this is clunky and annoying.
+            We'll take care of it soon.
+        </p></div></div></div></body></html>

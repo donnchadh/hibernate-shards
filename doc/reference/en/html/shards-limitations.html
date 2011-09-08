@@ -1,0 +1,167 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;6.&nbsp;Limitations</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="shards-querying.html" title="Chapter&nbsp;5.&nbsp;Querying"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;6.&nbsp;Limitations</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="shards-querying.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;</td></tr></table><hr></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-limitations"></a>Chapter&nbsp;6.&nbsp;Limitations</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-api"></a>6.1.&nbsp;Incomplete Implementation of Hibernate API</h2></div></div><div></div></div><p>
+            In order to speed-up the initial release of Hibernate Shards, some
+            parts of the Hibernate API that we rarely use were left unimplemented. Of course things that
+            we rarely used are probably critical for some applications, so if we've left you out in the cold
+            we apologize. We're committed to getting the rest of the API implemented quickly. For details on which
+            methods were not implemented, please see the Javadoc for <tt class="classname">ShardedSessionImpl</tt>,
+            <tt class="classname">ShardedCriteriaImpl</tt>, and <tt class="classname">ShardedQueryImpl</tt>.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-cross-shard"></a>6.2.&nbsp;Cross-Shard Object Graphs</h2></div></div><div></div></div><p>
+            Hibernate Shards does not currently support cross-shard object graphs.
+        </p><p>
+            In other words, it is illegal to create an association between objects A and B when A and B
+            live on different shards. The workaround is to define a property on A which uniquely identifies an
+            object of type B, and to use that property to load object B (remember what life was like
+            before Hibernate? Yeah, just like that.)
+        </p><p>
+            For example:
+            </p><pre class="programlisting">
+                --need domain for examples--
+            </pre><p>
+        </p><p>
+            In some applications your model may be constructed in such a way that it is difficult to make this kind
+            of mistake, but in some applications it may be easier. The scary thing here is that if you make this
+            mistake, Hibernate will consider the "bad" object in the list to be a new object and, assuming you have
+            cascades enabled for this relationship, it will create a new version of this object on a different shard.
+            This is trouble. In order to help prevent this sort of thing from happening we have an interceptor
+            called <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt> that checks for cross-shard
+            relationships on every object that is created or saved.
+        </p><p>
+            Unfortunately there is a cost associated with using the <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>.
+            In order to determine the shard on which an associated object resides we need to fetch the object from the
+            database, so if you have lazy-loaded associations the interceptor will resolve those associations as part
+            of its checks.  This is potentially quite expensive, and may not be suitable for a production system.
+            With this in mind, we've made it easy to configure whether or not this check is performed via the
+            "hibernate.shard.enable_cross_shard_relationship_checks" property we referenced in the chapter
+            on configuration.  If this property is set to "true" a <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>
+            will be registered with every <tt class="classname">ShardedSession</tt> that is established.  Don't worry,
+            you can still register your own interceptor as well.  Our expectation is that most applications will have
+            this check enabled in their dev and qa environments and disabled in their staging, load and performance,
+            and production environments.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-txns"></a>6.3.&nbsp;Distributed Transactions</h2></div></div><div></div></div><p>
+            Hibernate Shards does not provide support for distributed transactions within
+            a non-managed environment.  If your application requires
+            distributed transactions you need to plug in a transaction management implementation that supports
+            distributed transactions.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-interceptors"></a>6.4.&nbsp;Stateful Interceptors</h2></div></div><div></div></div><p>
+            We've done our best to make sure that, by and large, Hibernate Core code runs just fine when using Hibernate
+            Shards. There are, unfortunately, exceptions, and one of those exceptions is when your application needs
+            to use an
+            <tt class="classname">org.hibernate.Interceptor</tt>
+            that maintains state.
+        </p><p>
+            Stateful interceptors need special handling because, under the hood, we're instantiating one
+            <tt class="classname">org.hibernate.SessionImpl</tt> per shard. If we want an
+            <tt class="classname">Interceptor</tt> associated with the
+            <tt class="classname">Session</tt>, we need to pass in whatever
+            <tt class="classname">Interceptor</tt> was provided when the
+            <tt class="classname">ShardedSession</tt> was created. If that
+            <tt class="classname">Interceptor</tt> is stateful, the
+            <tt class="classname">Interceptor</tt> state for one
+            <tt class="classname">Session</tt> will be visible in all
+            <tt class="classname">Sessions</tt>. When you consider the sorts of things that are typically done in stateful
+            <tt class="classname">Interceptors</tt> (auditing for example), you can see how this can pose a problem.
+        </p><p>
+            Our solution is to require users to provide a
+            <tt class="classname">StatefulInterceptorFactory</tt> when they establish their
+            <tt class="classname">Session</tt> objects (which are really
+            <tt class="classname">ShardedSessions</tt>).  If the provided
+            <tt class="classname">Interceptor</tt> implements this interface, Hibernate Shards will ensure that a
+            fresh instance of the type of <tt class="classname">Interceptor</tt>
+            returned by <tt class="classname">StatefulInterceptorFactory.newInstance()</tt>
+            will be passed to each <tt class="classname">Session</tt>
+            that is established under the hood.  Here's an example:
+            </p><pre class="programlisting">
+public class MyStatefulInterceptorFactory extends BaseStatefulInterceptorFactory {
+    public Interceptor newInstance() {
+        return new MyInterceptor();
+    }
+}
+</pre><p>
+
+        </p><p>
+            Many <tt class="classname">Interceptor</tt> implementations require a reference to the
+            <tt class="classname">Session</tt> with which they're associated. In the case of a stateful
+            <tt class="classname">Interceptor</tt>, you want your <tt class="classname">Interceptor</tt>
+            to have a reference to the real (shard-specific) <tt class="classname">Session</tt>, not the shard-aware
+            <tt class="classname">Session</tt>. In order to facilitate this, you have the choice of having the type of
+            <tt class="classname">Interceptor</tt> that is constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implement the
+            <tt class="classname">RequiresSession</tt> interface. If the
+            <tt class="classname">Interceptor</tt> constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implements this interface, Hibernate Shards will provide the
+            <tt class="classname">Interceptor</tt> with a reference to the real (shard-specific)
+            <tt class="classname">Session</tt> once the factory constructs it. This way your
+            <tt class="classname">Interceptor</tt> can safely and accurately interact with a specific shard.  Here's an example:
+            </p><pre class="programlisting">
+public class MyStatefulInterceptor implements Interceptor, RequiresSession {
+    private Session session;
+
+    public void setSession(Session session) {
+        this.session = session;
+    }
+
+    ... // Interceptor interface impl
+}
+</pre><p>
+        </p><p>
+            Due to the basic nature of the problem we don't expect this to change anytime soon.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-base-ids"></a>6.5.&nbsp;Objects With Ids That Are Base Types</h2></div></div><div></div></div><p>
+            With Hibernate your model objects can use whatever they want as their ids so long as the id can be
+            represented by a <tt class="classname">Serializable</tt> (or autoboxed into a
+            <tt class="classname">Serializable</tt>). With Hibernate Shards you are slightly more constrained
+            because we don't support base types.
+        </p><p>
+            So this is no good:
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private int weatherReportId;  // trouble
+
+    public int getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(int id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            But this is just lovely:
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private Integer weatherReportId;  // goodness
+
+    public Integer getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(Integer id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            Do we have a good reason for this limitation? Not really. It's the result of an implementation
+            choice that has leaked out and made everyone's lives a tiny bit worse. If you simply must
+            use Hibernate Shards and you simply must model your ids with base types, don't call
+            <tt class="classname">Session.saveOrUpdate</tt>. We aim to address this leak soon and let you get back
+            to modeling whatever way you like (although for the record, we prefer object ids because
+            they make it easy to determine whether or not an object has had an id assigned).
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-replicated-data"></a>6.6.&nbsp;Replicated Data</h2></div></div><div></div></div><p>
+            Even though this is a framework for horizontal partitioning, there is almost always
+            read-only (or at least slow changing) data that lives on every shard. If you're just
+            reading these entities we don't have a problem, but if you want to associate these
+            entities with sharded entities we run into trouble. Suppose you have a Country table
+            on every shard with the exact same data, and suppose WeatherReport has a Country member.
+            How do we guarantee that the Country you associate with that WeatherReport is associated
+            with the same shard as the WeatherReport? If we get it wrong we'll end up with a cross-shard
+            relationship, and that's bad.
+        </p><p>We have a number
+            of ideas about how to make this easy to deal with but we have not yet implemented any of them.
+            In the short term, we think your best bet is to either not create object relationships between
+            sharded entities and replicated entities. In other words, just model the relationship like
+            you would if you weren't using an OR Mapping tool. We know this is clunky and annoying.
+            We'll take care of it soon.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="shards-querying.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Up</a></td><td width="40%" align="right">&nbsp;</td></tr><tr><td width="40%" align="left" valign="top">Chapter&nbsp;5.&nbsp;Querying&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;</td></tr></table></div></body></html>

@@ -1,0 +1,73 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="shards-resharding.html" title="Chapitre&nbsp;4.&nbsp;Refragmentation"><link rel="next" href="shards-limitations.html" title="Chapitre&nbsp;6.&nbsp;Limitations"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="shards-resharding.html">Pr&eacute;c&eacute;dent</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="shards-limitations.html">Suivant</a></td></tr></table><hr></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-querying"></a>Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes</h2></div></div><div></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-overview"></a>5.1.&nbsp;Vue d'ensemble</h2></div></div><div></div></div><p>
+            Ex&eacute;cuter des requ&ecirc;tes &agrave; travers des fragments peut &ecirc;tre difficile. Dans
+            ce chapitre nous parlerons de ce qui fonctionne, ce qui ne fonctionne pas, et
+            ce que vous pouvez faire pour &eacute;viter les ennuis.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-criteria"></a>5.2.&nbsp;Criteria</h2></div></div><div></div></div><p>
+            Comme nous en avons parl&eacute; dans le chapitre sur les limitations, nous
+            n'avons pas encore d'impl&eacute;mentation compl&egrave;te de l'API Hibernate Core.
+            Cette limitation s'applique &agrave; <tt class="classname">ShardedCriteriaImpl</tt>,
+            qui est une impl&eacute;mentation de l'interface <tt class="classname">Criteria</tt>
+            prenant en compte les fragments. Dans ce chapitre nous n'entrerons pas dans
+            les d&eacute;tails des choses sp&eacute;cifiques qui n'ont pas &eacute;t&eacute; impl&eacute;ment&eacute;es. Nous
+            allons plut&ocirc;t discuter des types de requ&ecirc;tes <tt class="classname">Criteria</tt>
+            qui sont probl&eacute;matiques dans un environnement fragment&eacute;.
+        </p><p>
+            Dis simplement, les requ&ecirc;tes qui effectuent des tris posent probl&egrave;me. Pourquoi ?
+            Parce que nous ne pouvons pas retourner une liste proprement tri&eacute;e sans la
+            capacit&eacute; de comparer une valeur de la liste &agrave; toute autre valeur de la liste,
+            et la liste enti&egrave;re n'est pas disponible jusqu'&agrave; ce que tous les r&eacute;sultats
+            des requ&ecirc;tes individuelles aient &eacute;t&eacute; collect&eacute;s dans la partie applicative.
+            Le tri a besoin de s'effectuer &agrave; l'int&eacute;rieur d'Hibernate Shards, et pour
+            que cela arrive, nous demandons &agrave; tous les objets retourn&eacute;s par une requ&ecirc;te
+            <tt class="classname">Criteria</tt> avec une clause "order-by" d'impl&eacute;menter
+            l'interface <tt class="classname">Comparable</tt>. Si le type des objets que
+            vous retournez n'impl&eacute;mente pas cette interface, vous aurez une exception.
+        </p><p>
+            Les clauses "distinct" posent aussi probl&egrave;me. Tellement de probl&egrave;mes, en fait,
+            que pour le moment nous les prenons m&ecirc;me pas en charge. D&eacute;sol&eacute; pour &ccedil;a.
+        </p><p>
+            D'un autre c&ocirc;t&eacute;, alors que "distinct" et "order-by" posent probl&egrave;mes, les
+            agr&eacute;gats fonctionnent bien. Consid&eacute;rez l'exemple suivante :
+            </p><pre class="programlisting">
+        // r&eacute;cup&egrave;re la moyenne de toutes les temp&eacute;ratures enregistr&eacute;es depuis jeudi dernier
+        Criteria crit = session.createCriteria(WeatherReport.class);
+        crit.add(Restrictions.gt("timestamp", lastThursday));
+        crit.setProjection(Projections.avg("temperature"));
+        return crit.list();
+            </pre><p>
+            Dans un environnement avec un seul fragment, cette requ&ecirc;te peut obtenir
+            une r&eacute;ponse facilement, mais dans un environnement avec plusieurs fragments
+            c'est un peu plus emb&ecirc;tant. Pourquoi ? Parce qu'obtenir la moyenne de chaque
+            fragment n'est pas suffisant pour calculer la moyenne &agrave; travers tous les
+            fragments. Pour calculer ce morceau d'informations, nous n'avons pas seulement
+            besoin de la moyenne mais du nombre d'enregistrements de chaque fragment.
+            C'est exactement ce que nous faisons, et l'impact sur les performances
+            (faire un "count" suppl&eacute;mentaire dans chaque requ&ecirc;te) est probablement
+            n&eacute;gligeable. Maintenant, si nous voulions la m&eacute;diane, nous aurions des probl&egrave;mes
+            (ajouter le "count" &agrave; la requ&ecirc;te ne fournirait pas assez d'informations pour
+            r&eacute;aliser le calcul), mais pour le moment <tt class="classname">Criteria</tt>
+            n'expose pas de fonction m&eacute;diane, donc nous traiterons &ccedil;a lorsque cela
+            arrivera et sera un probl&egrave;me.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-hql"></a>5.3.&nbsp;HQL</h2></div></div><div></div></div><p>
+            Notre prise en charge de HQL n'est pas, pour le moment, aussi bon que
+            la prise en charge des requ&ecirc;tes <tt class="classname">Criteria</tt>. Nous n'avons
+            pas encore impl&eacute;ment&eacute; d'extensions &agrave; l'analyseur lexico-syntaxique de
+            requ&ecirc;tes, donc nous prenons pas en charge "distinct", "order-by", ou les agr&eacute;gats.
+            Cela signifie que vous pouvez seulement utiliser HQL pour des requ&ecirc;tes tr&egrave;s
+            simples. Vous feriez probablement mieux d'&eacute;viter le HQL de cette version
+            si vous le pouvez.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-querying-strategy"></a>5.4.&nbsp;Use of Shard Strategy When Querying</h2></div></div><div></div></div><p>
+            Le seul composant de votre strat&eacute;gie de fragmentation qui est consult&eacute; lors
+            de l'ex&eacute;cution d'une requ&ecirc;te (<tt class="classname">Criteria</tt> ou HQL) est
+            la <tt class="classname">ShardAccessStrategy</tt>. <tt class="classname">ShardSelectionStrategy</tt>
+            est ignor&eacute;e parce qu'ex&eacute;cuter une requ&ecirc;te ne cr&eacute;e pas de nouvel enregistrement
+            dans la base de donn&eacute;es. <tt class="classname">ShardResolutionStrategy</tt>
+            est ignor&eacute;e parce qu'actuellement nous partons du principe que vous voulez
+            toujours que votre requ&ecirc;te soit ex&eacute;cut&eacute;e sur tous les fragments. Si ce n'est
+            pas le cas, la meilleure chose &agrave; faire de transtyper votre <tt class="classname">Session</tt>
+            en une <tt class="classname">ShardedSession</tt> et d'en extraire la <tt class="classname">Session</tt>
+            sp&eacute;cifique au fragment dont vous avez besoin. Maladroit, mais &ccedil;a fonctionne.
+            Nous proposerons une meilleure solution dans une prochaine version.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="shards-resharding.html">Pr&eacute;c&eacute;dent</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Niveau sup&eacute;rieur</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="shards-limitations.html">Suivant</a></td></tr><tr><td width="40%" align="left" valign="top">Chapitre&nbsp;4.&nbsp;Refragmentation&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Sommaire</a></td><td width="40%" align="right" valign="top">&nbsp;Chapitre&nbsp;6.&nbsp;Limitations</td></tr></table></div></body></html>

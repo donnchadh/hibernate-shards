@@ -1,0 +1,73 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;4.&nbsp;Resharding</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="shards-shardstrategy.html" title="Chapter&nbsp;3.&nbsp;Shard Strategy"><link rel="next" href="shards-querying.html" title="Chapter&nbsp;5.&nbsp;Querying"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;4.&nbsp;Resharding</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="shards-shardstrategy.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="shards-querying.html">Next</a></td></tr></table><hr></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-resharding"></a>Chapter&nbsp;4.&nbsp;Resharding</h2></div></div><div></div></div><p>
+        When an application's dataset grows beyond the capacity of the databases
+        originally allocated to the application it becomes necessary to add more databases, and
+        it is often desirable to redistribute the data across the shards (either to achieve
+        proper load balancing or to satisfy application invariants) - this is
+        called
+        resharding. Resharding is a complicated problem, and it has the potential to cause major
+        complications in the management of your production application if it is not considered during the design.
+        In order to ease some of the pain associated with resharding, Hibernate
+        Shards provides support for virtual shards.
+    </p><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-resharding-virtual"></a>4.1.&nbsp;Virtual Shards</h2></div></div><div></div></div><p>
+            In the general case, each object lives on a shard. Resharding consists
+            of two tasks: moving the object to another shard, and changing
+            object-shard mappings. The object-shard mapping is captured either by the shard ID
+            encoded into the object ID or by the internal logic of the shard
+            resolution strategy which the object uses. In the former case, resharding would require
+            changing all the object IDs and FKs. In the latter case, resharding could
+            require anything from changing the runtime configuration of a given
+            <tt class="classname">ShardResolutionStrategy</tt>
+            to changing the algorithm of the
+            <tt class="classname">ShardResolutionStrategy</tt>. Unfortunately, the problem of changing object-shard
+            mappings becomes even worse once we consider the fact that Hibernate Shards does not support cross-shard
+            relationships. This limitation prevents us from moving a subset of an object graph from one shard to
+            another.
+        </p><p>
+            The task of changing object-shard mappings can be simplified by adding a level
+            of indirection - each object lives on a virtual shard, and each virtual shard is mapped to
+            one physical shard. During design, developers must decide on the maximum number of physical shards
+            the application will ever require.  This maximum is then used as the number of virtual shards, and these
+            virtual shards are then mapped to the physical shards currently required by the application.
+            Since Hibernate
+            Shards'
+            <tt class="classname">ShardSelectionStrategy</tt>,
+            <tt class="classname">ShardResolutionStrategy</tt>, and
+            <tt class="classname">ShardEncodingIdentifierGenerator</tt>
+            all operate on virtual shards, the
+            objects will correctly be distributed across virtual shards. During resharding,
+            object-shard mappings can now simply be changed by changing virtual shard to physical shard
+            mappings.
+        </p><p>
+            If you're worried about correctly estimating the maximum number of physical shards your application
+            will ever require, aim high.  Virtual shards are cheap.  Down the road you'll be much better off with extra
+            virtual than if you have to add virtual shards.
+        </p><p>
+            In order to enable virtual sharding you need to create your <tt class="classname">ShardedConfiguration</tt>
+            with a Map from virtual shard ids to physical shard ids.  Here's an example where we have 4 virtual
+            shards mapped to 2 physical shards.
+</p><pre class="programlisting">
+Map&lt;Integer, Integer&gt; virtualShardMap = new HashMap&lt;Integer, Integer&gt;();
+virtualShardMap.put(0, 0);
+virtualShardMap.put(1, 0);
+virtualShardMap.put(2, 1);
+virtualShardMap.put(3, 1);
+ShardedConfiguration shardedConfig =
+    new ShardedConfiguration(
+        prototypeConfiguration,
+        configurations,
+        strategyFactory,
+        virtualShardMap);
+return shardedConfig.buildShardedSessionFactory();
+</pre><p>
+            In order to change the
+            virtual shard to physical shard mapping later on it is only necessary to change the
+            <tt class="classname">virtualShardToShardMap</tt> passed to this constructor.
+        </p><p>
+            We mentioned that the second task during resharding is moving data from one
+            physical shard to another. Hibernate Shards does not try to provide
+            automatic support for this as this is usually very application-specific, and
+            complexity varies based on the potential need for hot-resharding, deployment
+            architecture of the application, etc.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="shards-shardstrategy.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="shards-querying.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">Chapter&nbsp;3.&nbsp;Shard Strategy&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;5.&nbsp;Querying</td></tr></table></div></body></html>

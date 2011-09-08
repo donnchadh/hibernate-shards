@@ -1,0 +1,71 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapter&nbsp;1.&nbsp;Architecture</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="preface.html" title="Preface"><link rel="next" href="shards-configuration.html" title="Chapter&nbsp;2.&nbsp;Configuration"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapter&nbsp;1.&nbsp;Architecture</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="preface.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="shards-configuration.html">Next</a></td></tr></table><hr></div><div class="chapter" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="shards-architecture"></a>Chapter&nbsp;1.&nbsp;Architecture</h2></div></div><div></div></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-overview"></a>1.1.&nbsp;Overview</h2></div></div><div></div></div><p>
+            Hibernate Shards is an extension to Hibernate Core that is designed to encapsulate and minimize the
+            complexity of working with sharded (horizontally partitioned) data. Hibernate Shards can be conceptually
+            divided into two areas, both of which you will need to understand in order to be successful. The two areas
+            are:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>Generalized sharding logic</p></li><li style="list-style-type: circle"><p>Application specific sharding logic</p></li></ul></div><p>
+            We'll discuss each of these areas in turn.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-general"></a>1.2.&nbsp;Generalized Sharding Logic</h2></div></div><div></div></div><p>The primary goal of Hibernate Shards is to enable application developers to query and transact against
+            sharded datasets using the standard Hibernate Core API. This allows existing applications that use Hibernate
+            but do not yet need sharding to adopt our solution without major refactoring if and when they do reach this
+            stage. This also allows application developers who are familiar with Hibernate, need sharding, and are starting from
+            scratch to become productive in a short amount of time because there will be no need to ramp-up on a new
+            toolset. With this goal in mind, it should come as no surprise that Hibernate Shards primarily consists of
+            shard-aware implementations of many of the Hibernate Core interfaces you already know and love.
+        </p><p>
+            Most Hibernate-related application code primarily interacts with four interfaces provided by Hibernate
+            Core:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Session</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.SessionFactory</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Criteria</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.Query</tt>
+                    </p></li></ul></div><p>
+        </p><p>
+            Hibernate Shards provides shard-aware extensions of these four interfaces so that your code does not need to
+            know that it is interacting with a sharded dataset (unless of course you have specific reasons for exposing
+            this fact). The shard-aware extensions are:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.session.ShardedSession</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.ShardedSessionFactory</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.criteria.ShardedCriteria</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.query.ShardedQuery</tt>
+                    </p></li></ul></div><p>
+            The implementations we provide for these four shard-aware interfaces serve as a sharding engine that knows how to apply your
+            application-specific sharding logic across your various data stores. We don't expect application developers
+            to need to write much code that knowingly interacts with these interfaces, so if you do find yourself
+            declaring or passing around Sharded instances take a step back and see if you can make do with the parent
+            interface instead.
+        </p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-application"></a>1.3.&nbsp;Application Specific Sharding Logic</h2></div></div><div></div></div><p>
+            Every application that uses Hibernate Shards will have its own rules for how data gets distributed across
+            its shards. Rather than attempt to anticipate all these rules (an effort practically guaranteed to fail) we
+            have instead provided a set of interfaces behind which you can encode your application's data distribution
+            logic. These interfaces are:
+            </p><div class="itemizedlist"><ul type="opencircle"><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.selection.ShardSelectionStrategy</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.resolution.ShardResolutionStrategy</tt>
+                    </p></li><li style="list-style-type: circle"><p>
+                        <tt class="classname">org.hibernate.shards.strategy.access.ShardAccessStrategy</tt>
+                    </p></li></ul></div><p>
+            The implementations you provide for these three interfaces plus the id generation implementation you choose
+            (more on this in the Sharding Strategy chapter) comprise the
+            <span class="emphasis"><em>Sharding Strategy</em></span>
+            for your application. The sharding engine described in the previous section knows how to use the Sharding
+            Strategy you provide.
+        </p><p>In order to help you get up and running quickly, Hibernate Shards comes with a couple simple
+            implementations of these interfaces. We expect that they will aid you in your prototyping or in the early
+            stages of actual application development, but we also expect that, sooner or later, most applications will
+            provide their own implementations.
+        </p><p>For more information on Sharding Strategies please consult the chapter of the same name.</p></div><div class="sect1" lang="en"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-architecture-requirements"></a>1.4.&nbsp;System Requirements</h2></div></div><div></div></div><p>
+          Hibernate Shards has the same system requirements as Hibernate Core, with the additional restriction
+          that we require Java 1.5 or higher.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="preface.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="shards-configuration.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">Preface&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;2.&nbsp;Configuration</td></tr></table></div></body></html>

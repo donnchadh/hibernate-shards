@@ -1,0 +1,197 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Chapitre&nbsp;6.&nbsp;Limitations</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="shards-querying.html" title="Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Chapitre&nbsp;6.&nbsp;Limitations</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="shards-querying.html">Pr&eacute;c&eacute;dent</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;</td></tr></table><hr></div><div class="chapter" lang="fr"><div class="titlepage"><div><div><h2 class="title"><a name="shards-limitations"></a>Chapitre&nbsp;6.&nbsp;Limitations</h2></div></div><div></div></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-api"></a>6.1.&nbsp;Impl&eacute;mentation incompl&egrave;te de l'API Hibernate</h2></div></div><div></div></div><p>
+            Pour acc&eacute;l&eacute;rer la sortie initiale d'Hibernate Shards, certaines parties
+            de l'API Hibernate que nous utilisons rarement n'ont pas &eacute;t&eacute; impl&eacute;ment&eacute;es.
+            Bien s&ucirc;r, des choses que nous utilisons rarement sont probablement critiques
+            pour d'autres applications, donc si nous vous avons d&eacute;laiss&eacute;, nous nous en excusons.
+            Nous pr&eacute;voyons d'impl&eacute;menter le reste de l'API rapidement. Pour savoir quelles
+            m&eacute;thodes ne sont pas impl&eacute;ment&eacute;es, veuillez voir la javadoc de
+            <tt class="classname">ShardedSessionImpl</tt>, <tt class="classname">ShardedCriteriaImpl</tt>,
+            et <tt class="classname">ShardedQueryImpl</tt>.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-cross-shard"></a>6.2.&nbsp;Graphes d'objets inter-fragments</h2></div></div><div></div></div><p>
+            Hibernate Shards ne prend pas en charge actuellement les graphes d'objets
+            inter-fragments.
+        </p><p>
+            En d'autres mots, il est ill&eacute;gal de cr&eacute;er une association entre des objets A et B
+            quand A et B vivent sur des fragments diff&eacute;rents. Pour contourner cela,
+            il faut d&eacute;finir une propri&eacute;t&eacute; sur A qui identifie de mani&egrave;re unique un
+            objet de type B, et l'utiliser pour charger un objet B (Vous souvenez-vous comment
+            la vie &eacute;tait avant Hibernate ? Oui, juste comme &ccedil;a).
+        </p><p>
+            Par exemple :
+            </p><pre class="programlisting">
+                --besoin d'un domaine pour les exemples--
+            </pre><p>
+        </p><p>
+            Dans certaines applications, votre mod&egrave;le peut &ecirc;tre construit de telle
+            mani&egrave;re qu'il est difficile de faire ce genre d'erreur, mais dans d'autres
+            &ccedil;a peut &ecirc;tre plus facile. La chose effrayante ici est que si vous fa&icirc;tes
+            cette erreur, Hibernate prendra en compte le "mauvais" objet dans la liste
+            pour en faire un nouvel objet et, supposant que vous avez activ&eacute; les
+            op&eacute;rations en cascade pour cette relation, cr&eacute;era une nouvelle version de
+            cet objet sur un fragment diff&eacute;rent. C'est le probl&egrave;me. Pour aider &agrave;
+            &eacute;viter ce genre de chose, nous avons un intercepteur appel&eacute;
+            <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt> qui
+            v&eacute;rifie les relations inter-fragments pour tous les objets qui sont
+            cr&eacute;&eacute;s ou sauvegarg&eacute;s.
+        </p><p>
+            Malheureusement il y a un co&ucirc;t associ&eacute; &agrave; l'utilisation de <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>.
+            Pour d&eacute;terminer le fragment sur lequel un objet associ&eacute; r&eacute;side, nous avons besoin de r&eacute;cup&eacute;rer
+            l'objet en base de donn&eacute;es, donc si vous avez des associations charg&eacute;es &agrave;
+            la demande l'intercepteur r&eacute;soudra ces associations comme partie de ses v&eacute;rifications.
+            C'est potentiellement assez co&ucirc;teux, et peut ne pas &ecirc;tre appropri&eacute; pour un
+            syst&egrave;me de production. Avec &ccedil;a en t&ecirc;te, nous avons simplifi&eacute; l'activation ou non
+            de cette v&eacute;rification via la propri&eacute;t&eacute; "hibernate.shard.enable_cross_shard_relationship_checks"
+            que nous avons r&eacute;f&eacute;renc&eacute; dans le chapitre sur la configuration. Si cette
+            propri&eacute;t&eacute; est positionn&eacute;e &agrave; "true", un <tt class="classname">CrossShardRelationshipDetectingInterceptor</tt>
+            sera inscrit &agrave; chaque <tt class="classname">ShardedSession</tt> cr&eacute;&eacute;e.
+            Ne vous inqui&eacute;tez pas, vous pouvez toujours inscrire votre propre intercepteur.
+            Notre attente est que la plupart des applications auront activ&eacute; cette
+            v&eacute;rification dans leurs environnements de d&eacute;veloppement et d'assurance qualit&eacute;,
+            et d&eacute;sactiv&eacute; dans leurs environnements de tests et de production.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-txns"></a>6.3.&nbsp;Transactions r&eacute;parties</h2></div></div><div></div></div><p>
+            Hibernate Shards ne fournit pas de prise en charge pour les transactions
+            r&eacute;parties dans un environnement non g&eacute;r&eacute;. Si votre application requiert
+            des transactions r&eacute;parties, vous avez besoin de brancher une impl&eacute;mentation
+            de gestion de transactions qui prend en charge les transactions r&eacute;parties.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-interceptors"></a>6.4.&nbsp;Intercepteurs &agrave; &eacute;tat</h2></div></div><div></div></div><p>
+            Nous avons fait de notre mieux pour que, dans l'ensemble, le code
+            d'Hibernate Core s'ex&eacute;cute bien lors de l'utilisation d'Hibernate Shards.
+            Il y a, malheureusement, des exceptions, et une d'entre elles est quand
+            votre application a besoin d'utliser un
+            <tt class="classname">org.hibernate.Interceptor</tt>
+            qui maintient son &eacute;tat.
+        </p><p>
+            Les intercepteurs &agrave; &eacute;tat (NdT : stateful) ont besoin d'un traitement particulier parce que,
+            sous le capot, nous instancions une
+            <tt class="classname">org.hibernate.SessionImpl</tt> par fragment. Si nous voulons un
+            <tt class="classname">Interceptor</tt> associ&eacute; &agrave; la
+            <tt class="classname">Session</tt>, nous avons besoin de passer par
+            l'<tt class="classname">Interceptor</tt>, quelqu'il soit, qui &eacute;tait fourni quand la
+            <tt class="classname">ShardedSession</tt> a &eacute;t&eacute; cr&eacute;&eacute;e. Si cet
+            <tt class="classname">Interceptor</tt> est &agrave; &eacute;tat, l'&eacute;tat de
+            l'<tt class="classname">Interceptor</tt> pour une
+            <tt class="classname">Session</tt> sera visible dans toutes les
+            <tt class="classname">Session</tt>s. Si vous r&eacute;fl&eacute;chissez aux choses qui sont typiquement faites dans des
+            <tt class="classname">Interceptor</tt>s &agrave; &eacute;tat (audit par exemple), vous pouvez voir comment
+            cela peut poser probl&egrave;me.
+        </p><p>
+            Notre solution est d'obliger les utilisateurs &agrave; fournir une
+            <tt class="classname">StatefulInterceptorFactory</tt> quand ils cr&eacute;ent leurs
+            objets <tt class="classname">Session</tt> (lesquels sont r&eacute;llement des
+            <tt class="classname">ShardedSession</tt>s). Si
+            l'<tt class="classname">Interceptor</tt> fourni impl&eacute;mente cette interface,
+            Hibernate Shards assurera qu'une nouvelle instance du type de
+            <tt class="classname">Interceptor</tt> retourn&eacute;e par
+            <tt class="classname">StatefulInterceptorFactory.newInstance()</tt> sera pass&eacute;e
+            &agrave; chaque <tt class="classname">Session</tt> qui est cr&eacute;&eacute;e sous le capot.
+            Voici un exemple :
+            </p><pre class="programlisting">
+public class MyStatefulInterceptorFactory extends BaseStatefulInterceptorFactory {
+    public Interceptor newInstance() {
+        return new MyInterceptor();
+    }
+}
+</pre><p>
+
+        </p><p>
+            Beaucoup d'impl&eacute;mentations d'<tt class="classname">Interceptor</tt> requi&egrave;rent
+            une r&eacute;f&eacute;rence &agrave; la <tt class="classname">Session</tt> &agrave; laquelle elles sont associ&eacute;es.
+            Dans le cas d'un <tt class="classname">Interceptor</tt> &agrave; &eacute;tat, vous voulez que
+            votre <tt class="classname">Interceptor</tt> ait une r&eacute;f&eacute;rence &agrave; la
+            <tt class="classname">Session</tt> r&eacute;elle (sp&eacute;cifique au fragment). Pour faciliter
+            cela, vous avez le choix d'avoir le type d'<tt class="classname">Interceptor</tt>
+            qui est construit par la <tt class="classname">StatefulInterceptorFactory</tt>
+            [...]
+            Si l'<tt class="classname">Interceptor</tt> contruit par la
+            <tt class="classname">StatefulInterceptorFactory</tt> impl&eacute;mente cette interface,
+            Hibernate Shards fournira
+            
+            to have a reference to the real (shard-specific) <tt class="classname">Session</tt>, not the shard-aware
+            <tt class="classname">Session</tt>. In order to facilitate this, you have the choice of having the type of
+            <tt class="classname">Interceptor</tt> that is constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implement the
+            <tt class="classname">RequiresSession</tt> interface.[...] If the
+            <tt class="classname">Interceptor</tt> constructed by the
+            <tt class="classname">StatefulInterceptorFactory</tt> implements this interface, Hibernate Shards will provide the
+            <tt class="classname">Interceptor</tt> with a reference to the real (shard-specific)
+            <tt class="classname">Session</tt> once the factory constructs it. This way your
+            <tt class="classname">Interceptor</tt> can safely and accurately interact with a specific shard.  Here's an example:
+            </p><pre class="programlisting">
+public class MyStatefulInterceptor implements Interceptor, RequiresSession {
+    private Session session;
+
+    public void setSession(Session session) {
+        this.session = session;
+    }
+
+    ... // Impl&eacute;mentation de l'interface Interceptor
+}
+</pre><p>
+        </p><p>
+            Vu la nature fondamentale du probl&egrave;me, nous ne nous attendons pas &agrave; changer cela de suite.
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-base-ids"></a>6.5.&nbsp;Des objets avec des identifiants qui sont des types de base</h2></div></div><div></div></div><p>
+            Avec Hibernate, peu importe ce que vos objets du mod&egrave;le utilisent commen identifiant
+            tant qu'il peut &ecirc;tre repr&eacute;sent&eacute; par un <tt class="classname">Serializable</tt>
+            (ou encapsul&eacute; automatiquement dans un <tt class="classname">Serializable</tt>).
+            Avec Hibernate Shards vous &ecirc;tres l&eacute;g&egrave;rement plus contraints parce que nous
+            ne prenons pas en charge les types de base.
+        </p><p>
+            Ainsi, ceci n'est pas bon :
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private int weatherReportId;  // probl&egrave;me
+
+    public int getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(int id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            Mais ceci est adorable :
+            </p><pre class="programlisting">
+public class WeatherReport {
+    private Integer weatherReportId;  // correct
+
+    public Integer getWeatherReportId() {
+        return weatherReportId;
+    }
+
+    public void setWeatherReportId(Integer id) {
+        weatherReportId = id;
+    }
+}
+</pre><p>
+        </p><p>
+            Avons-nous une bonne raison &agrave; cette limitation ? Pas r&eacute;ellement. C'est
+            le r&eacute;sultat d'un choix d'impl&eacute;mentation qui a filtr&eacute; et qui a un peu
+            aggrav&eacute; la vie de chacun. Si vous devez simplement utiliser
+            Hibernate Shards et mod&eacute;liser vos identifiants avec des types de base,
+            n'appelez pas <tt class="classname">Session.saveOrUpdate</tt>. Nous avons pour
+            objectif de trouver une solution &agrave; ce probl&egrave;me bient&ocirc;t et de vous laisser mod&eacute;liser
+            comme bon vous semble (malgr&eacute; cela, nous pr&eacute;f&eacute;rerions des identifiants objet parce
+            qu'ils permettent de d&eacute;terminer plus facilement si un objet s'est vu assigner
+            un identifiant ou pas).
+        </p></div><div class="sect1" lang="fr"><div class="titlepage"><div><div><h2 class="title" style="clear: both"><a name="shards-limitations-replicated-data"></a>6.6.&nbsp;Donn&eacute;es r&eacute;pliqu&eacute;es</h2></div></div><div></div></div><p>
+            M&ecirc;me si c'est un framework pour le partionnement horizontal, il y a pratiquement
+            toujours des donn&eacute;es en lecture seules (ou du moins changeant rarement) qui vivent
+            dans chaque fragment. Si vous lisez juste ces entit&eacute;s nous n'avons pas de probl&egrave;me,
+            mais si vous voulez associer ces entit&eacute;s avec des entit&eacute;s fragment&eacute;es nous allons
+            avoir des probl&egrave;mes. Supposez que vous ayez une table Country sur chaque fragment avec
+            exactement les m&ecirc;mes donn&eacute;es, et supposez que WeatherReport a un membre Country.
+            Comment garantissons-nous que le Country que vous associez &agrave; ce WeatherReport
+            est associ&eacute; au m&ecirc;me fragment que celui du WeatherReport ? Si nous nous trompons,
+            nous finirons avec une relation entre plusieurs fragments, et ce n'est pas bien.
+        </p><p>
+            Nous avons des id&eacute;es pour rendre cela facile &agrave; traiter, mais nous ne les avons
+            pas encore impl&eacute;ment&eacute;es. Pour faire court, nous pensons qu'il est plus s&ucirc;r
+            pour vous de ne pas cr&eacute;er relations objet entre des entit&eacute;s fragment&eacute;es et
+            des entit&eacute;s r&eacute;pliqu&eacute;es. En d'autres mots, mod&eacute;lisez seulement la relation
+            comme vous feriez si vous n'utilisiez pas d'ORM. Nous savons que c'est
+            maladroit et annuyant. Nous nous en occuperons bient&ocirc;t.
+        </p></div></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="shards-querying.html">Pr&eacute;c&eacute;dent</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Niveau sup&eacute;rieur</a></td><td width="40%" align="right">&nbsp;</td></tr><tr><td width="40%" align="left" valign="top">Chapitre&nbsp;5.&nbsp;Requ&ecirc;tes&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Sommaire</a></td><td width="40%" align="right" valign="top">&nbsp;</td></tr></table></div></body></html>

@@ -1,0 +1,25 @@
+<html><head>
+      <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+   <title>Preface</title><link rel="stylesheet" href="../shared/css/html.css" type="text/css"><meta name="generator" content="DocBook XSL Stylesheets V1.65.1"><link rel="home" href="index.html" title="Hibernate Shards"><link rel="up" href="index.html" title="Hibernate Shards"><link rel="previous" href="index.html" title="Hibernate Shards"><link rel="next" href="shards-architecture.html" title="Chapter&nbsp;1.&nbsp;Architecture"></head><body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF"><div class="navheader"><table width="100%" summary="Navigation header"><tr><th colspan="3" align="center">Preface</th></tr><tr><td width="20%" align="left"><a accesskey="p" href="index.html">Prev</a>&nbsp;</td><th width="60%" align="center">&nbsp;</th><td width="20%" align="right">&nbsp;<a accesskey="n" href="shards-architecture.html">Next</a></td></tr></table><hr></div><div class="preface" lang="en"><div class="titlepage"><div><div><h2 class="title"><a name="preface"></a>Preface</h2></div></div><div></div></div><p>
+            You can't always put all your relational data in a single relational database.
+            Sometimes you simply have too much data. Sometimes you have a distributed deployment architecture
+            (network latency between California and India might be too high to have a single database). There might
+            even be non-technical reasons (a potential customer simply won't do the deal unless her company's data lives in its
+            own db instance). Whatever your reasons, talking to multiple relational databases inevitably complicates
+            the development of your application. Hibernate Shards is a framework that is designed to encapsulate and
+            minimize this complexity by adding support for
+            <a href="http://en.wikipedia.org/w/index.php?title=Partition_%28database%29&amp;oldid=99996308" target="_top">
+                horizontal partitioning
+            </a>
+            on top of Hibernate Core. Simply put, we aim to provide a unified view of multiple databases via Hibernate.
+        </p><p>
+            So what's a shard? Good question. "Shard" is just another word for "segment" or "partition," but
+            it's the term of choice within Google. Hibernate Shards was originally the
+            <a href="http://www.google.com/support/jobs/bin/static.py?page=about.html" target="_top">20 percent project</a>
+            of a small team of Google engineers, so the project nomenclature revolved around shards from the beginning.
+            We're open sourcing what we have so far because we want the Hibernate
+            community to be able to benefit from our efforts as soon as possible, but also with the hope and expectation
+            that this community will be able to help us reach a GA release much faster than if we kept this
+            under wraps. We fully expect to find glitches in both our design and implementation, and we appreciate your
+            patience as we work through them.
+        </p></div><div class="navfooter"><hr><table width="100%" summary="Navigation footer"><tr><td width="40%" align="left"><a accesskey="p" href="index.html">Prev</a>&nbsp;</td><td width="20%" align="center"><a accesskey="u" href="index.html">Up</a></td><td width="40%" align="right">&nbsp;<a accesskey="n" href="shards-architecture.html">Next</a></td></tr><tr><td width="40%" align="left" valign="top">Hibernate Shards&nbsp;</td><td width="20%" align="center"><a accesskey="h" href="index.html">Home</a></td><td width="40%" align="right" valign="top">&nbsp;Chapter&nbsp;1.&nbsp;Architecture</td></tr></table></div></body></html>

@@ -1,0 +1,16 @@
+org.hibernate.shards
+org.hibernate.shards.cfg
+org.hibernate.shards.criteria
+org.hibernate.shards.engine
+org.hibernate.shards.id
+org.hibernate.shards.loadbalance
+org.hibernate.shards.query
+org.hibernate.shards.session
+org.hibernate.shards.stat
+org.hibernate.shards.strategy
+org.hibernate.shards.strategy.access
+org.hibernate.shards.strategy.exit
+org.hibernate.shards.strategy.resolution
+org.hibernate.shards.strategy.selection
+org.hibernate.shards.transaction
+org.hibernate.shards.util
